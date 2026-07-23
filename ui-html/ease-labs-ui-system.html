@@ -1,0 +1,2653 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ease Labs — UI System / Component Map</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    /* ============================================================
+       EASE LABS — DESIGN TOKENS
+       ============================================================ */
+    :root {
+      /* ── Primary (Indigo) ── */
+      --primary-950: #1E1F5C;
+      --primary-900: #2A2C7A;
+      --primary-800: #373A9E;
+      --primary-700: #4648B8;
+      --primary-600: #5558D4;
+      --primary-500: #6366F1;
+      --primary-400: #7B83E8;
+      --primary-300: #A5A8F3;
+      --primary-200: #C7C9F7;
+      --primary-100: #E8E9FC;
+      --primary-50:  #F4F4FE;
+
+      /* ── Secondary (Green) ── */
+      --green-950: #0D4222;
+      --green-900: #155C31;
+      --green-800: #1F7A42;
+      --green-700: #2D9655;
+      --green-600: #3FB868;
+      --green-500: #4CC87A;
+      --green-400: #6FD696;
+      --green-300: #9CE5B8;
+      --green-200: #C5F0D5;
+      --green-100: #E2F8EB;
+      --green-50:  #F0FBF4;
+
+      /* ── Accent (Periwinkle — from molecule) ── */
+      --accent-950: #2B2D6B;
+      --accent-900: #3C3F8E;
+      --accent-800: #5255AB;
+      --accent-700: #656AC5;
+      --accent-600: #7B83E8;
+      --accent-500: #929AEF;
+      --accent-400: #ABB1F4;
+      --accent-300: #C5C9F8;
+      --accent-200: #DDDFFB;
+      --accent-100: #EDEDFD;
+      --accent-50:  #F6F6FE;
+
+      /* ── Neutrals ── */
+      --gray-950: #0F1119;
+      --gray-900: #1A1D2E;
+      --gray-800: #2D3148;
+      --gray-700: #454A66;
+      --gray-600: #5E6484;
+      --gray-500: #7A80A0;
+      --gray-400: #9CA1B8;
+      --gray-300: #BEC2D0;
+      --gray-200: #DDDFE6;
+      --gray-100: #EEEEF3;
+      --gray-50:  #F7F8FA;
+
+      /* ── Semantic ── */
+      --success:  #3FB868;
+      --warning:  #F5A623;
+      --error:    #E5484D;
+      --info:     #5558D4;
+
+      --success-bg: #E2F8EB;
+      --warning-bg: #FFF4E0;
+      --error-bg:   #FEECEC;
+      --info-bg:    #E8E9FC;
+
+      /* ── Surface / Background ── */
+      --bg-page:      #F7F8FA;
+      --bg-card:      #FFFFFF;
+      --bg-elevated:  #FFFFFF;
+      --bg-sidebar:   #1A1D2E;
+
+      /* ── Border ── */
+      --border-light:   #EEEEF3;
+      --border-default: #DDDFE6;
+      --border-strong:  #BEC2D0;
+
+      /* ── Typography ── */
+      --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+
+      /* ── Spacing ── */
+      --space-1:  4px;
+      --space-2:  8px;
+      --space-3:  12px;
+      --space-4:  16px;
+      --space-5:  20px;
+      --space-6:  24px;
+      --space-8:  32px;
+      --space-10: 40px;
+      --space-12: 48px;
+      --space-16: 64px;
+
+      /* ── Radius ── */
+      --radius-sm:   6px;
+      --radius-md:   8px;
+      --radius-lg:   12px;
+      --radius-xl:   16px;
+      --radius-2xl:  20px;
+      --radius-full: 9999px;
+
+      /* ── Shadow ── */
+      --shadow-xs:  0 1px 2px rgba(15,17,25,0.04);
+      --shadow-sm:  0 1px 3px rgba(15,17,25,0.06), 0 1px 2px rgba(15,17,25,0.04);
+      --shadow-md:  0 4px 6px rgba(15,17,25,0.06), 0 2px 4px rgba(15,17,25,0.04);
+      --shadow-lg:  0 10px 15px rgba(15,17,25,0.06), 0 4px 6px rgba(15,17,25,0.04);
+      --shadow-xl:  0 20px 25px rgba(15,17,25,0.08), 0 8px 10px rgba(15,17,25,0.04);
+
+      /* ── Transitions ── */
+      --transition-fast: 150ms ease;
+      --transition-base: 200ms ease;
+      --transition-slow: 300ms ease;
+    }
+
+    /* ============================================================
+       BASE RESET & PAGE LAYOUT
+       ============================================================ */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: var(--font-family);
+      background: var(--bg-page);
+      color: var(--gray-900);
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    .page {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: var(--space-10) var(--space-6);
+    }
+
+    /* ── Section ── */
+    .section {
+      margin-bottom: var(--space-16);
+    }
+    .section-title {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: var(--gray-500);
+      margin-bottom: var(--space-6);
+      padding-bottom: var(--space-3);
+      border-bottom: 1px solid var(--border-light);
+    }
+    .section-desc {
+      font-size: 14px;
+      color: var(--gray-600);
+      margin-bottom: var(--space-6);
+      max-width: 640px;
+    }
+
+    
+
+    /* ── Component Card ── */
+    .component-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius-lg);
+      padding: var(--space-8);
+      margin-bottom: var(--space-6);
+      box-shadow: var(--shadow-xs);
+    }
+    .component-card h3 {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--gray-900);
+      margin-bottom: var(--space-5);
+    }
+    .component-card .label {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      color: var(--gray-500);
+      margin-bottom: var(--space-2);
+    }
+
+    /* ── Flex utilities ── */
+    .flex { display: flex; }
+    .flex-wrap { flex-wrap: wrap; }
+    .flex-col { flex-direction: column; }
+    .items-center { align-items: center; }
+    .items-start { align-items: flex-start; }
+    .gap-1 { gap: var(--space-1); }
+    .gap-2 { gap: var(--space-2); }
+    .gap-3 { gap: var(--space-3); }
+    .gap-4 { gap: var(--space-4); }
+    .gap-5 { gap: var(--space-5); }
+    .gap-6 { gap: var(--space-6); }
+    .gap-8 { gap: var(--space-8); }
+
+    /* ============================================================
+       HEADER / COVER
+       ============================================================ */
+    .cover {
+      background: linear-gradient(135deg, var(--primary-600) 0%, var(--primary-800) 50%, var(--primary-950) 100%);
+      color: white;
+      padding: var(--space-16) var(--space-8);
+      border-radius: var(--radius-2xl);
+      margin-bottom: var(--space-16);
+      position: relative;
+      overflow: hidden;
+    }
+    .cover::before {
+      content: '';
+      position: absolute;
+      top: -40%;
+      right: -10%;
+      width: 500px;
+      height: 500px;
+      background: radial-gradient(circle, var(--accent-600) 0%, transparent 70%);
+      opacity: 0.15;
+      border-radius: 50%;
+    }
+    .cover::after {
+      content: '';
+      position: absolute;
+      bottom: -30%;
+      left: 10%;
+      width: 400px;
+      height: 400px;
+      background: radial-gradient(circle, var(--green-600) 0%, transparent 70%);
+      opacity: 0.1;
+      border-radius: 50%;
+    }
+    .cover h1 {
+      font-size: 40px;
+      font-weight: 800;
+      letter-spacing: -1px;
+      margin-bottom: var(--space-3);
+      position: relative;
+      z-index: 1;
+    }
+    .cover h1 span {
+      font-weight: 300;
+    }
+    .cover p {
+      font-size: 16px;
+      opacity: 0.8;
+      position: relative;
+      z-index: 1;
+    }
+    .cover .tag {
+      display: inline-block;
+      background: rgba(255,255,255,0.15);
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: var(--radius-full);
+      padding: var(--space-1) var(--space-4);
+      font-size: 12px;
+      font-weight: 600;
+      margin-bottom: var(--space-5);
+      position: relative;
+      z-index: 1;
+    }
+
+    /* ============================================================
+       1. COLOR PALETTE
+       ============================================================ */
+    .palette-row {
+      display: flex;
+      gap: 2px;
+      border-radius: var(--radius-md);
+      overflow: hidden;
+      margin-bottom: var(--space-4);
+    }
+    .palette-swatch {
+      flex: 1;
+      height: 64px;
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      padding-bottom: 6px;
+      font-size: 10px;
+      font-weight: 600;
+      position: relative;
+      cursor: default;
+      transition: transform var(--transition-fast);
+    }
+    .palette-swatch:hover {
+      transform: scaleY(1.15);
+      z-index: 1;
+    }
+    .palette-swatch .swatch-info {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 1px;
+    }
+    .palette-swatch .swatch-name {
+      font-size: 9px;
+      font-weight: 700;
+      opacity: 0.7;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .palette-swatch .swatch-hex {
+      font-size: 10px;
+      font-weight: 500;
+    }
+    .palette-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--gray-700);
+      margin-bottom: var(--space-2);
+    }
+
+    /* ============================================================
+       2. TYPOGRAPHY
+       ============================================================ */
+    .type-specimen {
+      margin-bottom: var(--space-5);
+      padding-bottom: var(--space-5);
+      border-bottom: 1px solid var(--border-light);
+    }
+    .type-specimen:last-child { border-bottom: none; }
+    .type-meta {
+      display: flex;
+      gap: var(--space-4);
+      margin-top: var(--space-2);
+    }
+    .type-meta span {
+      font-size: 11px;
+      color: var(--gray-500);
+      font-weight: 500;
+    }
+
+    /* ============================================================
+       3. BUTTONS
+       ============================================================ */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: var(--space-2);
+      font-family: var(--font-family);
+      font-size: 14px;
+      font-weight: 600;
+      border: none;
+      cursor: pointer;
+      border-radius: var(--radius-md);
+      padding: 10px 20px;
+      transition: all var(--transition-base);
+      line-height: 1.4;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+
+    /* Primary */
+    .btn-primary {
+      background: var(--primary-600);
+      color: #FFFFFF;
+      box-shadow: 0 1px 2px rgba(85,88,212,0.3);
+    }
+    .btn-primary:hover {
+      background: var(--primary-700);
+      box-shadow: 0 4px 12px rgba(85,88,212,0.35);
+      transform: translateY(-1px);
+    }
+    .btn-primary:active {
+      background: var(--primary-800);
+      transform: translateY(0);
+      box-shadow: 0 1px 2px rgba(85,88,212,0.3);
+    }
+    .btn-primary.disabled {
+      background: var(--primary-200);
+      color: var(--primary-400);
+      cursor: not-allowed;
+      box-shadow: none;
+      transform: none;
+    }
+
+    /* Secondary */
+    .btn-secondary {
+      background: transparent;
+      color: var(--primary-600);
+      border: 1.5px solid var(--primary-300);
+    }
+    .btn-secondary:hover {
+      background: var(--primary-50);
+      border-color: var(--primary-400);
+    }
+    .btn-secondary:active {
+      background: var(--primary-100);
+      border-color: var(--primary-500);
+    }
+    .btn-secondary.disabled {
+      color: var(--gray-400);
+      border-color: var(--gray-200);
+      cursor: not-allowed;
+    }
+
+    /* Ghost */
+    .btn-ghost {
+      background: transparent;
+      color: var(--gray-700);
+    }
+    .btn-ghost:hover {
+      background: var(--gray-100);
+      color: var(--gray-900);
+    }
+    .btn-ghost:active {
+      background: var(--gray-200);
+    }
+    .btn-ghost.disabled {
+      color: var(--gray-400);
+      cursor: not-allowed;
+    }
+
+    /* Success (Green CTA — like "Onde comprar") */
+    .btn-success {
+      background: var(--green-600);
+      color: #FFFFFF;
+      box-shadow: 0 1px 2px rgba(63,184,104,0.3);
+    }
+    .btn-success:hover {
+      background: var(--green-700);
+      box-shadow: 0 4px 12px rgba(63,184,104,0.35);
+      transform: translateY(-1px);
+    }
+    .btn-success:active {
+      background: var(--green-800);
+      transform: translateY(0);
+    }
+    .btn-success.disabled {
+      background: var(--green-200);
+      color: var(--green-400);
+      cursor: not-allowed;
+      box-shadow: none;
+    }
+
+    /* Danger */
+    .btn-danger {
+      background: var(--error);
+      color: #FFFFFF;
+    }
+    .btn-danger:hover {
+      background: #D43B40;
+      transform: translateY(-1px);
+    }
+
+    /* Sizes */
+    .btn-sm {
+      font-size: 12px;
+      padding: 6px 14px;
+      border-radius: var(--radius-sm);
+    }
+    .btn-lg {
+      font-size: 16px;
+      padding: 14px 28px;
+      border-radius: var(--radius-md);
+    }
+
+    /* Full Width */
+    .btn-full {
+      width: 100%;
+    }
+
+    /* Icon button */
+    .btn-icon {
+      width: 40px;
+      height: 40px;
+      padding: 0;
+      border-radius: var(--radius-md);
+    }
+    .btn-icon.btn-sm {
+      width: 32px;
+      height: 32px;
+    }
+
+    /* SVG icons inside buttons */
+    .btn svg {
+      width: 16px;
+      height: 16px;
+      flex-shrink: 0;
+    }
+
+    /* ============================================================
+       4. INPUT FIELDS
+       ============================================================ */
+    .input-group {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-1);
+    }
+    .input-label {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--gray-800);
+    }
+    .input-hint {
+      font-size: 12px;
+      color: var(--gray-500);
+    }
+    .input-field {
+      font-family: var(--font-family);
+      font-size: 14px;
+      color: var(--gray-900);
+      background: var(--bg-card);
+      border: 1.5px solid var(--border-default);
+      border-radius: var(--radius-md);
+      padding: 10px 14px;
+      outline: none;
+      transition: all var(--transition-base);
+      width: 100%;
+    }
+    .input-field::placeholder {
+      color: var(--gray-400);
+    }
+    .input-field:hover {
+      border-color: var(--gray-400);
+    }
+    .input-field:focus {
+      border-color: var(--primary-500);
+      box-shadow: 0 0 0 3px var(--primary-100);
+    }
+    .input-field.input-error {
+      border-color: var(--error);
+    }
+    .input-field.input-error:focus {
+      box-shadow: 0 0 0 3px var(--error-bg);
+    }
+    .input-field.input-success {
+      border-color: var(--success);
+    }
+    .input-field.input-success:focus {
+      box-shadow: 0 0 0 3px var(--success-bg);
+    }
+    .input-field:disabled {
+      background: var(--gray-50);
+      border-color: var(--border-light);
+      color: var(--gray-400);
+      cursor: not-allowed;
+    }
+    .input-error-msg {
+      font-size: 12px;
+      color: var(--error);
+      display: flex;
+      align-items: center;
+      gap: var(--space-1);
+    }
+
+    /* Input with icon */
+    .input-with-icon {
+      position: relative;
+    }
+    .input-with-icon .input-field {
+      padding-left: 40px;
+    }
+    .input-with-icon .input-icon {
+      position: absolute;
+      left: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--gray-400);
+      pointer-events: none;
+    }
+    .input-with-icon .input-icon svg {
+      width: 16px;
+      height: 16px;
+    }
+
+    /* Textarea */
+    .input-textarea {
+      resize: vertical;
+      min-height: 100px;
+    }
+
+    /* Select */
+    .input-select {
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%235E6484' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 14px center;
+      padding-right: 36px;
+    }
+
+    /* ============================================================
+       5. RADIO CARD CHOOSER
+       ============================================================ */
+    .radio-card-group {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: var(--space-3);
+    }
+    .radio-card {
+      position: relative;
+      background: var(--bg-card);
+      border: 1.5px solid var(--border-default);
+      border-radius: var(--radius-lg);
+      padding: var(--space-5);
+      cursor: pointer;
+      transition: all var(--transition-base);
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-2);
+    }
+    .radio-card:hover {
+      border-color: var(--primary-400);
+      background: var(--primary-50);
+    }
+    .radio-card.selected {
+      border-color: var(--primary-600);
+      background: var(--primary-50);
+      box-shadow: 0 0 0 3px var(--primary-100);
+    }
+    .radio-card.disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .radio-card .radio-indicator {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      border: 2px solid var(--gray-300);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all var(--transition-base);
+      flex-shrink: 0;
+    }
+    .radio-card.selected .radio-indicator {
+      border-color: var(--primary-600);
+      background: var(--primary-600);
+    }
+    .radio-card.selected .radio-indicator::after {
+      content: '';
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: white;
+    }
+    .radio-card .radio-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: var(--radius-md);
+      background: var(--primary-100);
+      color: var(--primary-600);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: var(--space-1);
+    }
+    .radio-card.selected .radio-icon {
+      background: var(--primary-600);
+      color: white;
+    }
+    .radio-card .radio-icon svg {
+      width: 20px;
+      height: 20px;
+    }
+    .radio-card .radio-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--gray-900);
+    }
+    .radio-card .radio-desc {
+      font-size: 12px;
+      color: var(--gray-500);
+      line-height: 1.4;
+    }
+
+    /* ============================================================
+       6. BADGE CHOOSER
+       ============================================================ */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-1);
+      font-size: 12px;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: var(--radius-full);
+      transition: all var(--transition-base);
+    }
+    .badge svg {
+      width: 12px;
+      height: 12px;
+    }
+
+    .badge-primary {
+      background: var(--primary-100);
+      color: var(--primary-700);
+    }
+    .badge-green {
+      background: var(--green-100);
+      color: var(--green-800);
+    }
+    .badge-accent {
+      background: var(--accent-100);
+      color: var(--accent-800);
+    }
+    .badge-gray {
+      background: var(--gray-100);
+      color: var(--gray-700);
+    }
+    .badge-warning {
+      background: var(--warning-bg);
+      color: #9A6700;
+    }
+    .badge-error {
+      background: var(--error-bg);
+      color: #C53030;
+    }
+    .badge-success {
+      background: var(--success-bg);
+      color: var(--green-900);
+    }
+
+    /* Badge Chooser (selectable) */
+    .badge-chooser {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-2);
+    }
+    .badge-choice {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-2);
+      font-size: 13px;
+      font-weight: 500;
+      padding: 6px 14px;
+      border-radius: var(--radius-full);
+      border: 1.5px solid var(--border-default);
+      background: var(--bg-card);
+      color: var(--gray-700);
+      cursor: pointer;
+      transition: all var(--transition-base);
+    }
+    .badge-choice:hover {
+      border-color: var(--primary-400);
+      color: var(--primary-700);
+      background: var(--primary-50);
+    }
+    .badge-choice.selected {
+      border-color: var(--primary-600);
+      background: var(--primary-600);
+      color: white;
+    }
+    .badge-choice.disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
+    /* ============================================================
+       7. CARDS & CONTAINERS
+       ============================================================ */
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-xs);
+      overflow: hidden;
+    }
+    .card-header {
+      padding: var(--space-5) var(--space-6);
+      border-bottom: 1px solid var(--border-light);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .card-header h4 {
+      font-size: 15px;
+      font-weight: 600;
+    }
+    .card-body {
+      padding: var(--space-6);
+    }
+    .card-footer {
+      padding: var(--space-4) var(--space-6);
+      border-top: 1px solid var(--border-light);
+      background: var(--gray-50);
+      display: flex;
+      justify-content: flex-end;
+      gap: var(--space-3);
+    }
+
+    /* Stat card */
+    .stat-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius-lg);
+      padding: var(--space-6);
+      box-shadow: var(--shadow-xs);
+    }
+    .stat-card .stat-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--gray-500);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: var(--space-2);
+    }
+    .stat-card .stat-value {
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--gray-900);
+      letter-spacing: -0.5px;
+    }
+    .stat-card .stat-change {
+      font-size: 13px;
+      font-weight: 600;
+      margin-top: var(--space-2);
+      display: flex;
+      align-items: center;
+      gap: var(--space-1);
+    }
+    .stat-card .stat-change.up { color: var(--green-700); }
+    .stat-card .stat-change.down { color: var(--error); }
+
+    /* ============================================================
+       8. TOGGLE / SWITCH
+       ============================================================ */
+    .toggle-switch {
+      width: 44px;
+      height: 24px;
+      background: var(--gray-300);
+      border-radius: var(--radius-full);
+      position: relative;
+      cursor: pointer;
+      transition: background var(--transition-base);
+    }
+    .toggle-switch::after {
+      content: '';
+      width: 18px;
+      height: 18px;
+      background: white;
+      border-radius: 50%;
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      transition: transform var(--transition-base);
+      box-shadow: var(--shadow-sm);
+    }
+    .toggle-switch.active {
+      background: var(--primary-600);
+    }
+    .toggle-switch.active::after {
+      transform: translateX(20px);
+    }
+    .toggle-switch.disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    /* ============================================================
+       9. CHECKBOX
+       ============================================================ */
+    .checkbox {
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+      cursor: pointer;
+      font-size: 14px;
+      color: var(--gray-800);
+    }
+    .checkbox-box {
+      width: 18px;
+      height: 18px;
+      border: 2px solid var(--gray-300);
+      border-radius: var(--radius-sm);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all var(--transition-base);
+      flex-shrink: 0;
+    }
+    .checkbox.checked .checkbox-box {
+      background: var(--primary-600);
+      border-color: var(--primary-600);
+    }
+    .checkbox.checked .checkbox-box svg {
+      display: block;
+    }
+    .checkbox-box svg {
+      width: 12px;
+      height: 12px;
+      color: white;
+      display: none;
+    }
+
+    /* ============================================================
+       10. TABS
+       ============================================================ */
+    .tabs {
+      display: flex;
+      border-bottom: 2px solid var(--border-light);
+      gap: var(--space-1);
+    }
+    .tab {
+      padding: var(--space-3) var(--space-5);
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--gray-500);
+      border-bottom: 2px solid transparent;
+      margin-bottom: -2px;
+      cursor: pointer;
+      transition: all var(--transition-base);
+      border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+    }
+    .tab:hover {
+      color: var(--gray-700);
+      background: var(--gray-50);
+    }
+    .tab.active {
+      color: var(--primary-600);
+      border-bottom-color: var(--primary-600);
+      font-weight: 600;
+    }
+
+    /* ============================================================
+       11. TABLE
+       ============================================================ */
+    .table-wrapper {
+      overflow-x: auto;
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--border-light);
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+    thead {
+      background: var(--gray-50);
+    }
+    th {
+      text-align: left;
+      padding: var(--space-3) var(--space-4);
+      font-weight: 600;
+      font-size: 12px;
+      color: var(--gray-600);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border-bottom: 1px solid var(--border-default);
+    }
+    td {
+      padding: var(--space-3) var(--space-4);
+      border-bottom: 1px solid var(--border-light);
+      color: var(--gray-800);
+    }
+    tbody tr:hover {
+      background: var(--gray-50);
+    }
+    tbody tr:last-child td {
+      border-bottom: none;
+    }
+
+    /* ============================================================
+       12. ALERTS / TOAST
+       ============================================================ */
+    .alert {
+      display: flex;
+      align-items: flex-start;
+      gap: var(--space-3);
+      padding: var(--space-4) var(--space-5);
+      border-radius: var(--radius-md);
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    .alert svg {
+      width: 18px;
+      height: 18px;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+    .alert-info {
+      background: var(--info-bg);
+      color: var(--primary-800);
+      border: 1px solid var(--primary-200);
+    }
+    .alert-success {
+      background: var(--success-bg);
+      color: var(--green-900);
+      border: 1px solid var(--green-200);
+    }
+    .alert-warning {
+      background: var(--warning-bg);
+      color: #7A5200;
+      border: 1px solid #FFD88D;
+    }
+    .alert-error {
+      background: var(--error-bg);
+      color: #9B1C1C;
+      border: 1px solid #F5A3A6;
+    }
+
+    /* ============================================================
+       13. AVATAR
+       ============================================================ */
+    .avatar {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: var(--primary-100);
+      color: var(--primary-700);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+    .avatar-sm { width: 32px; height: 32px; font-size: 12px; }
+    .avatar-lg { width: 48px; height: 48px; font-size: 16px; }
+
+    /* ============================================================
+       14. PROGRESS BAR
+       ============================================================ */
+    .progress-bar {
+      width: 100%;
+      height: 8px;
+      background: var(--gray-100);
+      border-radius: var(--radius-full);
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%;
+      border-radius: var(--radius-full);
+      transition: width var(--transition-slow);
+    }
+    .progress-fill.primary { background: var(--primary-600); }
+    .progress-fill.green { background: var(--green-600); }
+    .progress-fill.accent { background: var(--accent-600); }
+
+    /* ============================================================
+       15. TOOLTIP (CSS only demo)
+       ============================================================ */
+    .tooltip-demo {
+      position: relative;
+      display: inline-block;
+    }
+    .tooltip-demo .tooltip-text {
+      visibility: hidden;
+      opacity: 0;
+      position: absolute;
+      bottom: calc(100% + 8px);
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--gray-900);
+      color: white;
+      padding: 6px 12px;
+      border-radius: var(--radius-sm);
+      font-size: 12px;
+      font-weight: 500;
+      white-space: nowrap;
+      transition: opacity var(--transition-fast);
+      pointer-events: none;
+    }
+    .tooltip-demo .tooltip-text::after {
+      content: '';
+      position: absolute;
+      top: 100%;
+      left: 50%;
+      transform: translateX(-50%);
+      border: 5px solid transparent;
+      border-top-color: var(--gray-900);
+    }
+    .tooltip-demo:hover .tooltip-text {
+      visibility: visible;
+      opacity: 1;
+    }
+
+    /* ============================================================
+       16. SPACING VISUALIZER
+       ============================================================ */
+    .space-demo {
+      display: flex;
+      align-items: center;
+      gap: var(--space-4);
+      margin-bottom: var(--space-3);
+    }
+    .space-demo .space-block {
+      background: var(--primary-100);
+      border: 1px dashed var(--primary-400);
+      border-radius: 2px;
+    }
+    .space-demo .space-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--gray-600);
+      min-width: 100px;
+    }
+    .space-demo .space-value {
+      font-size: 11px;
+      color: var(--gray-500);
+      font-family: monospace;
+    }
+
+    /* ============================================================
+       17. SIDEBAR PREVIEW
+       ============================================================ */
+    .sidebar-preview {
+      background: var(--bg-sidebar);
+      border-radius: var(--radius-lg);
+      padding: var(--space-5);
+      width: 260px;
+      flex-shrink: 0;
+    }
+    .sidebar-preview .sidebar-logo {
+      font-size: 18px;
+      font-weight: 700;
+      color: white;
+      margin-bottom: var(--space-6);
+      padding-bottom: var(--space-4);
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+    }
+    .sidebar-preview .sidebar-logo span {
+      font-weight: 300;
+    }
+    .sidebar-preview .nav-item {
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+      padding: var(--space-3) var(--space-4);
+      border-radius: var(--radius-md);
+      font-size: 14px;
+      color: rgba(255,255,255,0.6);
+      margin-bottom: 2px;
+      cursor: pointer;
+      transition: all var(--transition-base);
+    }
+    .sidebar-preview .nav-item:hover {
+      background: rgba(255,255,255,0.08);
+      color: rgba(255,255,255,0.9);
+    }
+    .sidebar-preview .nav-item.active {
+      background: var(--primary-600);
+      color: white;
+    }
+    .sidebar-preview .nav-item svg {
+      width: 18px;
+      height: 18px;
+      opacity: 0.7;
+    }
+    .sidebar-preview .nav-item.active svg {
+      opacity: 1;
+    }
+    .sidebar-preview .nav-section {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: rgba(255,255,255,0.3);
+      margin-top: var(--space-5);
+      margin-bottom: var(--space-2);
+      padding-left: var(--space-4);
+    }
+
+    /* ============================================================
+       GRID HELPERS
+       ============================================================ */
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: var(--space-6);
+    }
+    .grid-3 {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: var(--space-6);
+    }
+    .grid-4 {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: var(--space-5);
+    }
+
+    @media (max-width: 768px) {
+      .grid-2, .grid-3, .grid-4 {
+        grid-template-columns: 1fr;
+      }
+      .cover h1 { font-size: 28px; }
+    }
+
+    /* ============================================================
+       14. IDENTITY — GRADIENTS
+       ============================================================ */
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(12px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Corp Header — signature left-border gradient */
+    .corp-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 18px 28px;
+      background: #FFFFFF;
+      border-radius: 12px;
+      border: 1px solid #EEEEF2;
+      margin-bottom: 24px;
+      box-shadow: 0 2px 12px rgba(11, 12, 42, 0.06);
+      border-left: 4px solid transparent;
+      border-image: linear-gradient(180deg, #6ECC64, #5661E8) 1;
+      position: relative;
+      overflow: hidden;
+      animation: fadeInUp 0.45s ease-out;
+    }
+    .corp-header .corp-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--gray-900);
+    }
+    .corp-header .corp-subtitle {
+      font-size: 13px;
+      color: var(--gray-500);
+      margin-top: 2px;
+    }
+
+    /* Gradient swatches */
+    .gradient-swatch {
+      height: 80px;
+      border-radius: var(--radius-lg);
+      display: flex;
+      align-items: flex-end;
+      padding: var(--space-3) var(--space-4);
+      position: relative;
+      overflow: hidden;
+    }
+    .gradient-swatch .gradient-label {
+      font-size: 11px;
+      font-weight: 700;
+      color: rgba(255,255,255,0.9);
+      text-shadow: 0 1px 3px rgba(0,0,0,0.2);
+    }
+    .gradient-swatch .gradient-code {
+      font-size: 10px;
+      color: rgba(255,255,255,0.7);
+      font-family: monospace;
+    }
+
+    /* Gradient button */
+    .btn-gradient {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: var(--space-2);
+      font-family: var(--font-family);
+      font-size: 14px;
+      font-weight: 600;
+      border: none;
+      cursor: pointer;
+      border-radius: var(--radius-full);
+      padding: 12px 28px;
+      color: #FFFFFF;
+      background: linear-gradient(135deg, #5661E8, #6ECC64);
+      box-shadow: 0 4px 15px rgba(86, 97, 232, 0.3);
+      transition: all var(--transition-base);
+      text-decoration: none;
+    }
+    .btn-gradient:hover {
+      box-shadow: 0 6px 20px rgba(86, 97, 232, 0.4);
+      transform: translateY(-1px);
+    }
+
+    /* Gradient text utility */
+    .text-gradient {
+      background: linear-gradient(135deg, #5661E8, #6ECC64);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    /* Gradient border card */
+    .gradient-border-card {
+      position: relative;
+      background: #FFFFFF;
+      border-radius: 14px;
+      padding: var(--space-6);
+      overflow: hidden;
+    }
+    .gradient-border-card::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: 14px;
+      padding: 2px;
+      background: linear-gradient(135deg, #6ECC64, #5661E8);
+      -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+      mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor;
+      mask-composite: exclude;
+      pointer-events: none;
+    }
+
+    /* Gradient divider */
+    .gradient-divider {
+      height: 3px;
+      border-radius: 2px;
+      background: linear-gradient(90deg, #6ECC64, #5661E8);
+      border: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+
+    <!-- ============================================================
+         COVER
+         ============================================================ -->
+    <div class="cover">
+      <div class="tag">UI System v1.0</div>
+      <img src="../assets/LOGO.webp"
+           alt="Ease Labs Pharma"
+           style="height:52px;margin-bottom:var(--space-4);filter:brightness(0) invert(1);position:relative;z-index:1;display:block">
+      <p style="position:relative;z-index:1">Dashboard Component Map &mdash; Identidade Visual para Dashboards</p>
+    </div>
+
+    <!-- ============================================================
+         00. LOGO
+         ============================================================ -->
+    <div class="section">
+      <div class="section-title">00 &mdash; Logo</div>
+      <p class="section-desc">Logo oficial da Ease Labs Pharma. Use sempre os arquivos originais — nunca recrie o logo com texto. As variações abaixo cobrem os principais contextos de uso nos dashboards.</p>
+
+      <div class="component-card">
+        <h3>Variações de Fundo</h3>
+        <div class="grid-3" style="margin-bottom:var(--space-6)">
+
+          <!-- White bg -->
+          <div>
+            <div style="background:#FFFFFF;border:1px solid var(--border-default);border-radius:var(--radius-lg);padding:var(--space-8);display:flex;align-items:center;justify-content:center;min-height:120px">
+              <img src="../assets/LOGO.webp" alt="Ease Labs Pharma" style="height:44px">
+            </div>
+            <div style="font-size:12px;font-weight:600;color:var(--gray-600);margin-top:8px">Fundo Branco</div>
+            <div style="font-size:11px;color:var(--gray-400)">#FFFFFF — uso padrão</div>
+          </div>
+
+          <!-- Light bg -->
+          <div>
+            <div style="background:var(--gray-50);border:1px solid var(--border-light);border-radius:var(--radius-lg);padding:var(--space-8);display:flex;align-items:center;justify-content:center;min-height:120px">
+              <img src="../assets/LOGO.webp" alt="Ease Labs Pharma" style="height:44px">
+            </div>
+            <div style="font-size:12px;font-weight:600;color:var(--gray-600);margin-top:8px">Fundo Claro</div>
+            <div style="font-size:11px;color:var(--gray-400)">#F7F8FA — página principal</div>
+          </div>
+
+          <!-- Dark bg — white version -->
+          <div>
+            <div style="background:var(--gray-900);border-radius:var(--radius-lg);padding:var(--space-8);display:flex;align-items:center;justify-content:center;min-height:120px">
+              <img src="../assets/LOGO.webp" alt="Ease Labs Pharma" style="height:44px;filter:brightness(0) invert(1)">
+            </div>
+            <div style="font-size:12px;font-weight:600;color:var(--gray-600);margin-top:8px">Fundo Escuro (invertido)</div>
+            <div style="font-size:11px;color:var(--gray-400);font-family:monospace;font-size:10px">filter: brightness(0) invert(1)</div>
+          </div>
+
+          <!-- Primary bg -->
+          <div>
+            <div style="background:var(--primary-600);border-radius:var(--radius-lg);padding:var(--space-8);display:flex;align-items:center;justify-content:center;min-height:120px">
+              <img src="../assets/LOGO.webp" alt="Ease Labs Pharma" style="height:44px;filter:brightness(0) invert(1)">
+            </div>
+            <div style="font-size:12px;font-weight:600;color:var(--gray-600);margin-top:8px">Fundo Primário</div>
+            <div style="font-size:11px;color:var(--gray-400)">#5558D4 — cover, header</div>
+          </div>
+
+          <!-- Gradient bg -->
+          <div>
+            <div style="background:linear-gradient(135deg,#5661E8,#6ECC64);border-radius:var(--radius-lg);padding:var(--space-8);display:flex;align-items:center;justify-content:center;min-height:120px">
+              <img src="../assets/LOGO.webp" alt="Ease Labs Pharma" style="height:44px;filter:brightness(0) invert(1)">
+            </div>
+            <div style="font-size:12px;font-weight:600;color:var(--gray-600);margin-top:8px">Fundo Gradiente</div>
+            <div style="font-size:11px;color:var(--gray-400)">Brand gradient</div>
+          </div>
+
+          <!-- Sidebar bg -->
+          <div>
+            <div style="background:#1A1D2E;border-radius:var(--radius-lg);padding:var(--space-8);display:flex;align-items:center;justify-content:center;min-height:120px">
+              <img src="../assets/LOGO.webp" alt="Ease Labs Pharma" style="height:44px;filter:brightness(0) invert(1)">
+            </div>
+            <div style="font-size:12px;font-weight:600;color:var(--gray-600);margin-top:8px">Fundo Sidebar</div>
+            <div style="font-size:11px;color:var(--gray-400)">#1A1D2E — sidebar dark</div>
+          </div>
+        </div>
+
+        <!-- Size scale -->
+        <h3>Escala de Tamanhos</h3>
+        <div style="display:flex;flex-direction:column;gap:var(--space-5);margin-bottom:var(--space-6)">
+          <div class="flex items-center gap-5">
+            <div style="min-width:120px;font-size:12px;font-weight:600;color:var(--gray-600)">SM &mdash; 24px</div>
+            <div style="background:var(--gray-50);border:1px solid var(--border-light);border-radius:var(--radius-md);padding:var(--space-3) var(--space-5);display:inline-flex;align-items:center">
+              <img src="../assets/LOGO.webp" alt="Ease Labs" style="height:24px">
+            </div>
+            <span style="font-size:11px;color:var(--gray-400)">Sidebar colapsada, favicon contexts</span>
+          </div>
+          <div class="flex items-center gap-5">
+            <div style="min-width:120px;font-size:12px;font-weight:600;color:var(--gray-600)">MD &mdash; 36px</div>
+            <div style="background:var(--gray-50);border:1px solid var(--border-light);border-radius:var(--radius-md);padding:var(--space-3) var(--space-5);display:inline-flex;align-items:center">
+              <img src="../assets/LOGO.webp" alt="Ease Labs" style="height:36px">
+            </div>
+            <span style="font-size:11px;color:var(--gray-400)">Sidebar expandida, navbar</span>
+          </div>
+          <div class="flex items-center gap-5">
+            <div style="min-width:120px;font-size:12px;font-weight:600;color:var(--gray-600)">LG &mdash; 48px</div>
+            <div style="background:var(--gray-50);border:1px solid var(--border-light);border-radius:var(--radius-md);padding:var(--space-3) var(--space-5);display:inline-flex;align-items:center">
+              <img src="../assets/LOGO.webp" alt="Ease Labs" style="height:48px">
+            </div>
+            <span style="font-size:11px;color:var(--gray-400)">Login screens, splash, reports</span>
+          </div>
+          <div class="flex items-center gap-5">
+            <div style="min-width:120px;font-size:12px;font-weight:600;color:var(--gray-600)">XL &mdash; 64px</div>
+            <div style="background:var(--gray-50);border:1px solid var(--border-light);border-radius:var(--radius-md);padding:var(--space-3) var(--space-5);display:inline-flex;align-items:center">
+              <img src="../assets/LOGO.webp" alt="Ease Labs" style="height:64px">
+            </div>
+            <span style="font-size:11px;color:var(--gray-400)">Covers, apresentações, PDFs</span>
+          </div>
+        </div>
+
+        <!-- Code snippets -->
+        <h3>Como usar no HTML</h3>
+        <div style="background:var(--gray-900);border-radius:var(--radius-md);padding:var(--space-5);overflow-x:auto">
+          <pre style="margin:0;font-size:12px;line-height:1.9;color:#ABB1F4;font-family:'Fira Code',Consolas,monospace"><span style="color:#5E6484">/* ─── Logo: fundo claro (padrão) ─── */</span>
+&lt;<span style="color:#6FD696">img</span> <span style="color:#9CA1B8">src</span>=<span style="color:#F5A623">"../assets/LOGO.webp"</span>
+     <span style="color:#9CA1B8">alt</span>=<span style="color:#F5A623">"Ease Labs Pharma"</span>
+     <span style="color:#9CA1B8">style</span>=<span style="color:#F5A623">"height:36px"</span>&gt;
+
+<span style="color:#5E6484">/* ─── Logo: fundo escuro (invertido) ─── */</span>
+&lt;<span style="color:#6FD696">img</span> <span style="color:#9CA1B8">src</span>=<span style="color:#F5A623">"../assets/LOGO.webp"</span>
+     <span style="color:#9CA1B8">alt</span>=<span style="color:#F5A623">"Ease Labs Pharma"</span>
+     <span style="color:#9CA1B8">style</span>=<span style="color:#F5A623">"height:36px; filter:brightness(0) invert(1)"</span>&gt;
+
+<span style="color:#5E6484">/* ─── Via URL remota (para dashboards deployados) ─── */</span>
+&lt;<span style="color:#6FD696">img</span> <span style="color:#9CA1B8">src</span>=<span style="color:#F5A623">"https://quironpharma.com/img/easelabs.png"</span>
+     <span style="color:#9CA1B8">alt</span>=<span style="color:#F5A623">"Ease Labs Pharma"</span>
+     <span style="color:#9CA1B8">style</span>=<span style="color:#F5A623">"height:36px"</span>&gt;</pre>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================================================
+         1. COLOR PALETTE
+         ============================================================ -->
+    <div class="section">
+      <div class="section-title">01 &mdash; Paleta de Cores</div>
+      <p class="section-desc">Cores extraídas do logo, do site e dos materiais da Ease Labs. A paleta primária (Indigo) representa a marca, o verde é usado para CTAs e ações positivas, e o Periwinkle (acento) conecta ao ícone molecular.</p>
+
+      <div class="component-card">
+        <h3>Primary &mdash; Indigo</h3>
+        <div class="palette-row">
+          <div class="palette-swatch" style="background:#1E1F5C;color:#fff"><div class="swatch-info"><span class="swatch-name">950</span><span class="swatch-hex">#1E1F5C</span></div></div>
+          <div class="palette-swatch" style="background:#2A2C7A;color:#fff"><div class="swatch-info"><span class="swatch-name">900</span><span class="swatch-hex">#2A2C7A</span></div></div>
+          <div class="palette-swatch" style="background:#373A9E;color:#fff"><div class="swatch-info"><span class="swatch-name">800</span><span class="swatch-hex">#373A9E</span></div></div>
+          <div class="palette-swatch" style="background:#4648B8;color:#fff"><div class="swatch-info"><span class="swatch-name">700</span><span class="swatch-hex">#4648B8</span></div></div>
+          <div class="palette-swatch" style="background:#5558D4;color:#fff"><div class="swatch-info"><span class="swatch-name">600</span><span class="swatch-hex">#5558D4</span></div></div>
+          <div class="palette-swatch" style="background:#6366F1;color:#fff"><div class="swatch-info"><span class="swatch-name">500</span><span class="swatch-hex">#6366F1</span></div></div>
+          <div class="palette-swatch" style="background:#7B83E8;color:#fff"><div class="swatch-info"><span class="swatch-name">400</span><span class="swatch-hex">#7B83E8</span></div></div>
+          <div class="palette-swatch" style="background:#A5A8F3;color:#2A2C7A"><div class="swatch-info"><span class="swatch-name">300</span><span class="swatch-hex">#A5A8F3</span></div></div>
+          <div class="palette-swatch" style="background:#C7C9F7;color:#2A2C7A"><div class="swatch-info"><span class="swatch-name">200</span><span class="swatch-hex">#C7C9F7</span></div></div>
+          <div class="palette-swatch" style="background:#E8E9FC;color:#373A9E"><div class="swatch-info"><span class="swatch-name">100</span><span class="swatch-hex">#E8E9FC</span></div></div>
+          <div class="palette-swatch" style="background:#F4F4FE;color:#5558D4"><div class="swatch-info"><span class="swatch-name">50</span><span class="swatch-hex">#F4F4FE</span></div></div>
+        </div>
+      </div>
+
+      <div class="component-card">
+        <h3>Secondary &mdash; Green</h3>
+        <div class="palette-row">
+          <div class="palette-swatch" style="background:#0D4222;color:#fff"><div class="swatch-info"><span class="swatch-name">950</span><span class="swatch-hex">#0D4222</span></div></div>
+          <div class="palette-swatch" style="background:#155C31;color:#fff"><div class="swatch-info"><span class="swatch-name">900</span><span class="swatch-hex">#155C31</span></div></div>
+          <div class="palette-swatch" style="background:#1F7A42;color:#fff"><div class="swatch-info"><span class="swatch-name">800</span><span class="swatch-hex">#1F7A42</span></div></div>
+          <div class="palette-swatch" style="background:#2D9655;color:#fff"><div class="swatch-info"><span class="swatch-name">700</span><span class="swatch-hex">#2D9655</span></div></div>
+          <div class="palette-swatch" style="background:#3FB868;color:#fff"><div class="swatch-info"><span class="swatch-name">600</span><span class="swatch-hex">#3FB868</span></div></div>
+          <div class="palette-swatch" style="background:#4CC87A;color:#fff"><div class="swatch-info"><span class="swatch-name">500</span><span class="swatch-hex">#4CC87A</span></div></div>
+          <div class="palette-swatch" style="background:#6FD696;color:#0D4222"><div class="swatch-info"><span class="swatch-name">400</span><span class="swatch-hex">#6FD696</span></div></div>
+          <div class="palette-swatch" style="background:#9CE5B8;color:#0D4222"><div class="swatch-info"><span class="swatch-name">300</span><span class="swatch-hex">#9CE5B8</span></div></div>
+          <div class="palette-swatch" style="background:#C5F0D5;color:#155C31"><div class="swatch-info"><span class="swatch-name">200</span><span class="swatch-hex">#C5F0D5</span></div></div>
+          <div class="palette-swatch" style="background:#E2F8EB;color:#1F7A42"><div class="swatch-info"><span class="swatch-name">100</span><span class="swatch-hex">#E2F8EB</span></div></div>
+          <div class="palette-swatch" style="background:#F0FBF4;color:#2D9655"><div class="swatch-info"><span class="swatch-name">50</span><span class="swatch-hex">#F0FBF4</span></div></div>
+        </div>
+      </div>
+
+      <div class="component-card">
+        <h3>Accent &mdash; Periwinkle</h3>
+        <div class="palette-row">
+          <div class="palette-swatch" style="background:#2B2D6B;color:#fff"><div class="swatch-info"><span class="swatch-name">950</span><span class="swatch-hex">#2B2D6B</span></div></div>
+          <div class="palette-swatch" style="background:#3C3F8E;color:#fff"><div class="swatch-info"><span class="swatch-name">900</span><span class="swatch-hex">#3C3F8E</span></div></div>
+          <div class="palette-swatch" style="background:#5255AB;color:#fff"><div class="swatch-info"><span class="swatch-name">800</span><span class="swatch-hex">#5255AB</span></div></div>
+          <div class="palette-swatch" style="background:#656AC5;color:#fff"><div class="swatch-info"><span class="swatch-name">700</span><span class="swatch-hex">#656AC5</span></div></div>
+          <div class="palette-swatch" style="background:#7B83E8;color:#fff"><div class="swatch-info"><span class="swatch-name">600</span><span class="swatch-hex">#7B83E8</span></div></div>
+          <div class="palette-swatch" style="background:#929AEF;color:#fff"><div class="swatch-info"><span class="swatch-name">500</span><span class="swatch-hex">#929AEF</span></div></div>
+          <div class="palette-swatch" style="background:#ABB1F4;color:#2B2D6B"><div class="swatch-info"><span class="swatch-name">400</span><span class="swatch-hex">#ABB1F4</span></div></div>
+          <div class="palette-swatch" style="background:#C5C9F8;color:#2B2D6B"><div class="swatch-info"><span class="swatch-name">300</span><span class="swatch-hex">#C5C9F8</span></div></div>
+          <div class="palette-swatch" style="background:#DDDFFB;color:#3C3F8E"><div class="swatch-info"><span class="swatch-name">200</span><span class="swatch-hex">#DDDFFB</span></div></div>
+          <div class="palette-swatch" style="background:#EDEDFD;color:#5255AB"><div class="swatch-info"><span class="swatch-name">100</span><span class="swatch-hex">#EDEDFD</span></div></div>
+          <div class="palette-swatch" style="background:#F6F6FE;color:#656AC5"><div class="swatch-info"><span class="swatch-name">50</span><span class="swatch-hex">#F6F6FE</span></div></div>
+        </div>
+      </div>
+
+      <div class="component-card">
+        <h3>Neutrals &mdash; Gray</h3>
+        <div class="palette-row">
+          <div class="palette-swatch" style="background:#0F1119;color:#fff"><div class="swatch-info"><span class="swatch-name">950</span><span class="swatch-hex">#0F1119</span></div></div>
+          <div class="palette-swatch" style="background:#1A1D2E;color:#fff"><div class="swatch-info"><span class="swatch-name">900</span><span class="swatch-hex">#1A1D2E</span></div></div>
+          <div class="palette-swatch" style="background:#2D3148;color:#fff"><div class="swatch-info"><span class="swatch-name">800</span><span class="swatch-hex">#2D3148</span></div></div>
+          <div class="palette-swatch" style="background:#454A66;color:#fff"><div class="swatch-info"><span class="swatch-name">700</span><span class="swatch-hex">#454A66</span></div></div>
+          <div class="palette-swatch" style="background:#5E6484;color:#fff"><div class="swatch-info"><span class="swatch-name">600</span><span class="swatch-hex">#5E6484</span></div></div>
+          <div class="palette-swatch" style="background:#7A80A0;color:#fff"><div class="swatch-info"><span class="swatch-name">500</span><span class="swatch-hex">#7A80A0</span></div></div>
+          <div class="palette-swatch" style="background:#9CA1B8;color:#0F1119"><div class="swatch-info"><span class="swatch-name">400</span><span class="swatch-hex">#9CA1B8</span></div></div>
+          <div class="palette-swatch" style="background:#BEC2D0;color:#0F1119"><div class="swatch-info"><span class="swatch-name">300</span><span class="swatch-hex">#BEC2D0</span></div></div>
+          <div class="palette-swatch" style="background:#DDDFE6;color:#454A66"><div class="swatch-info"><span class="swatch-name">200</span><span class="swatch-hex">#DDDFE6</span></div></div>
+          <div class="palette-swatch" style="background:#EEEEF3;color:#454A66"><div class="swatch-info"><span class="swatch-name">100</span><span class="swatch-hex">#EEEEF3</span></div></div>
+          <div class="palette-swatch" style="background:#F7F8FA;color:#5E6484"><div class="swatch-info"><span class="swatch-name">50</span><span class="swatch-hex">#F7F8FA</span></div></div>
+        </div>
+      </div>
+
+      <div class="component-card">
+        <h3>Semantic</h3>
+        <div class="flex gap-4 flex-wrap">
+          <div style="text-align:center">
+            <div style="width:80px;height:52px;background:var(--success);border-radius:var(--radius-md);margin-bottom:4px"></div>
+            <div style="font-size:11px;font-weight:600;color:var(--gray-600)">Success</div>
+            <div style="font-size:10px;color:var(--gray-500)">#3FB868</div>
+          </div>
+          <div style="text-align:center">
+            <div style="width:80px;height:52px;background:var(--warning);border-radius:var(--radius-md);margin-bottom:4px"></div>
+            <div style="font-size:11px;font-weight:600;color:var(--gray-600)">Warning</div>
+            <div style="font-size:10px;color:var(--gray-500)">#F5A623</div>
+          </div>
+          <div style="text-align:center">
+            <div style="width:80px;height:52px;background:var(--error);border-radius:var(--radius-md);margin-bottom:4px"></div>
+            <div style="font-size:11px;font-weight:600;color:var(--gray-600)">Error</div>
+            <div style="font-size:10px;color:var(--gray-500)">#E5484D</div>
+          </div>
+          <div style="text-align:center">
+            <div style="width:80px;height:52px;background:var(--info);border-radius:var(--radius-md);margin-bottom:4px"></div>
+            <div style="font-size:11px;font-weight:600;color:var(--gray-600)">Info</div>
+            <div style="font-size:10px;color:var(--gray-500)">#5558D4</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================================================
+         2. TYPOGRAPHY
+         ============================================================ -->
+    <div class="section">
+      <div class="section-title">02 &mdash; Tipografia</div>
+      <p class="section-desc">Família tipográfica: <strong>Inter</strong>. Escolhida pela excelente legibilidade em interfaces de dados, suporte completo a caracteres e versatilidade de pesos.</p>
+
+      <div class="component-card">
+        <h3>Hierarquia Tipográfica</h3>
+
+        <div class="type-specimen">
+          <div style="font-size:36px;font-weight:800;letter-spacing:-1px;color:var(--gray-900)">Display</div>
+          <div class="type-meta">
+            <span>Inter 800</span>
+            <span>36px / 44px</span>
+            <span>Letter-spacing: -1px</span>
+          </div>
+        </div>
+
+        <div class="type-specimen">
+          <div style="font-size:28px;font-weight:700;letter-spacing:-0.5px;color:var(--gray-900)">Heading 1</div>
+          <div class="type-meta">
+            <span>Inter 700</span>
+            <span>28px / 36px</span>
+            <span>Letter-spacing: -0.5px</span>
+          </div>
+        </div>
+
+        <div class="type-specimen">
+          <div style="font-size:22px;font-weight:700;color:var(--gray-900)">Heading 2</div>
+          <div class="type-meta">
+            <span>Inter 700</span>
+            <span>22px / 30px</span>
+          </div>
+        </div>
+
+        <div class="type-specimen">
+          <div style="font-size:18px;font-weight:600;color:var(--gray-900)">Heading 3</div>
+          <div class="type-meta">
+            <span>Inter 600</span>
+            <span>18px / 26px</span>
+          </div>
+        </div>
+
+        <div class="type-specimen">
+          <div style="font-size:16px;font-weight:600;color:var(--gray-900)">Heading 4</div>
+          <div class="type-meta">
+            <span>Inter 600</span>
+            <span>16px / 24px</span>
+          </div>
+        </div>
+
+        <div class="type-specimen">
+          <div style="font-size:14px;font-weight:400;color:var(--gray-800);line-height:1.6">Body &mdash; Texto padrão para parágrafos e conteúdo geral dos dashboards. A entrelinha generosa (1.6) garante conforto na leitura de dados.</div>
+          <div class="type-meta">
+            <span>Inter 400</span>
+            <span>14px / 22px</span>
+          </div>
+        </div>
+
+        <div class="type-specimen">
+          <div style="font-size:14px;font-weight:500;color:var(--gray-800)">Body Medium &mdash; Texto com destaque leve para labels importantes</div>
+          <div class="type-meta">
+            <span>Inter 500</span>
+            <span>14px / 22px</span>
+          </div>
+        </div>
+
+        <div class="type-specimen">
+          <div style="font-size:13px;font-weight:400;color:var(--gray-600)">Small &mdash; Usado em legendas, tooltips e informações complementares</div>
+          <div class="type-meta">
+            <span>Inter 400</span>
+            <span>13px / 20px</span>
+          </div>
+        </div>
+
+        <div class="type-specimen">
+          <div style="font-size:12px;font-weight:500;color:var(--gray-500)">Caption &mdash; Rótulos menores, hints, timestamps</div>
+          <div class="type-meta">
+            <span>Inter 500</span>
+            <span>12px / 18px</span>
+          </div>
+        </div>
+
+        <div class="type-specimen">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--gray-500)">Overline &mdash; Seções e categorias</div>
+          <div class="type-meta">
+            <span>Inter 700</span>
+            <span>11px / 16px</span>
+            <span>Uppercase + letter-spacing: 1px</span>
+          </div>
+        </div>
+
+        <div class="type-specimen">
+          <div style="font-size:48px;font-weight:700;letter-spacing:-1.5px;color:var(--gray-900)">R$ 1.250.000</div>
+          <div class="type-meta">
+            <span>Inter 700</span>
+            <span>48px</span>
+            <span>Uso: KPIs e métricas grandes</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================================================
+         3. BUTTONS
+         ============================================================ -->
+    <div class="section">
+      <div class="section-title">03 &mdash; Botões</div>
+
+      <div class="component-card">
+        <h3>Variantes</h3>
+        <div class="flex gap-4 flex-wrap items-center" style="margin-bottom:var(--space-6)">
+          <button class="btn btn-primary">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+            Primário
+          </button>
+          <button class="btn btn-secondary">Secundário</button>
+          <button class="btn btn-ghost">Ghost</button>
+          <button class="btn btn-success">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7"/></svg>
+            Confirmar
+          </button>
+          <button class="btn btn-danger">Excluir</button>
+        </div>
+
+        <div class="label">Tamanhos</div>
+        <div class="flex gap-4 flex-wrap items-center" style="margin-bottom:var(--space-6)">
+          <button class="btn btn-primary btn-sm">Small</button>
+          <button class="btn btn-primary">Default</button>
+          <button class="btn btn-primary btn-lg">Large</button>
+        </div>
+
+        <div class="label">Com Ícone (full-width)</div>
+        <div class="flex flex-col gap-3" style="max-width:400px;margin-bottom:var(--space-6)">
+          <button class="btn btn-primary btn-full">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+            Exportar Relatório
+          </button>
+          <button class="btn btn-secondary btn-full">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+            Buscar Produtos
+          </button>
+          <button class="btn btn-success btn-full">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+            Novo Cadastro
+          </button>
+        </div>
+
+        <div class="label">Botões de Ícone</div>
+        <div class="flex gap-3 items-center" style="margin-bottom:var(--space-6)">
+          <button class="btn btn-primary btn-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+          </button>
+          <button class="btn btn-secondary btn-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
+          </button>
+          <button class="btn btn-ghost btn-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+          </button>
+          <button class="btn btn-ghost btn-icon btn-sm">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+          </button>
+        </div>
+
+        <div class="label">Estados</div>
+        <div class="flex gap-4 flex-wrap items-center">
+          <button class="btn btn-primary">Default</button>
+          <button class="btn btn-primary" style="background:var(--primary-700);box-shadow:0 4px 12px rgba(85,88,212,0.35)">Hover</button>
+          <button class="btn btn-primary" style="background:var(--primary-800)">Pressed</button>
+          <button class="btn btn-primary disabled">Disabled</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================================================
+         4. INPUT FIELDS
+         ============================================================ -->
+    <div class="section">
+      <div class="section-title">04 &mdash; Campos de Input</div>
+
+      <div class="component-card">
+        <div class="grid-2">
+          <!-- Default -->
+          <div class="input-group">
+            <label class="input-label">Nome completo</label>
+            <input type="text" class="input-field" placeholder="Digite seu nome" value="João Silva">
+          </div>
+
+          <!-- With hint -->
+          <div class="input-group">
+            <label class="input-label">E-mail</label>
+            <input type="email" class="input-field" placeholder="email@exemplo.com">
+            <span class="input-hint">Será usado para notificações</span>
+          </div>
+
+          <!-- Error state -->
+          <div class="input-group">
+            <label class="input-label">CPF</label>
+            <input type="text" class="input-field input-error" value="123.456">
+            <span class="input-error-msg">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
+              CPF inválido
+            </span>
+          </div>
+
+          <!-- Success state -->
+          <div class="input-group">
+            <label class="input-label">CRM</label>
+            <input type="text" class="input-field input-success" value="CRM/SP 123456">
+          </div>
+
+          <!-- Disabled -->
+          <div class="input-group">
+            <label class="input-label">ID do Registro</label>
+            <input type="text" class="input-field" disabled value="EL-2026-0042">
+          </div>
+
+          <!-- With icon -->
+          <div class="input-group">
+            <label class="input-label">Buscar</label>
+            <div class="input-with-icon">
+              <span class="input-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+              </span>
+              <input type="text" class="input-field" placeholder="Buscar por nome, SKU...">
+            </div>
+          </div>
+
+          <!-- Textarea -->
+          <div class="input-group" style="grid-column:span 2">
+            <label class="input-label">Observações</label>
+            <textarea class="input-field input-textarea" placeholder="Adicione observações sobre o pedido..."></textarea>
+          </div>
+
+          <!-- Select -->
+          <div class="input-group">
+            <label class="input-label">Estado</label>
+            <select class="input-field input-select">
+              <option value="">Selecione...</option>
+              <option>São Paulo</option>
+              <option>Rio de Janeiro</option>
+              <option>Minas Gerais</option>
+            </select>
+          </div>
+
+          <!-- Focus demo -->
+          <div class="input-group">
+            <label class="input-label">Focus State (clique)</label>
+            <input type="text" class="input-field" placeholder="Clique para ver o focus ring">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================================================
+         5. RADIO CARD CHOOSER
+         ============================================================ -->
+    <div class="section">
+      <div class="section-title">05 &mdash; Radio Card Chooser</div>
+      <p class="section-desc">Componente de seleção em formato de card, ideal para escolhas exclusivas com descrição visual.</p>
+
+      <div class="component-card">
+        <h3>Seleção de Plano</h3>
+        <div class="radio-card-group" style="margin-bottom:var(--space-6)">
+          <div class="radio-card">
+            <div class="flex items-center gap-3">
+              <div class="radio-indicator"></div>
+              <div class="radio-title">Básico</div>
+            </div>
+            <div class="radio-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            </div>
+            <div class="radio-desc">Até 5 usuários. Ideal para equipes pequenas.</div>
+          </div>
+
+          <div class="radio-card selected">
+            <div class="flex items-center gap-3">
+              <div class="radio-indicator"></div>
+              <div class="radio-title">Profissional</div>
+            </div>
+            <div class="radio-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
+            </div>
+            <div class="radio-desc">Até 25 usuários com analytics avançado.</div>
+          </div>
+
+          <div class="radio-card">
+            <div class="flex items-center gap-3">
+              <div class="radio-indicator"></div>
+              <div class="radio-title">Enterprise</div>
+            </div>
+            <div class="radio-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v16"/></svg>
+            </div>
+            <div class="radio-desc">Ilimitado. SLA dedicado e suporte premium.</div>
+          </div>
+
+          <div class="radio-card disabled">
+            <div class="flex items-center gap-3">
+              <div class="radio-indicator"></div>
+              <div class="radio-title">Legacy</div>
+            </div>
+            <div class="radio-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
+            </div>
+            <div class="radio-desc">Descontinuado. Não disponível para novos cadastros.</div>
+          </div>
+        </div>
+
+        <h3>Seleção de Período</h3>
+        <div class="radio-card-group" style="grid-template-columns:repeat(auto-fill,minmax(140px,1fr))">
+          <div class="radio-card" style="align-items:center;text-align:center">
+            <div class="radio-indicator" style="align-self:center"></div>
+            <div class="radio-title">Diário</div>
+            <div class="radio-desc">Últimas 24h</div>
+          </div>
+          <div class="radio-card" style="align-items:center;text-align:center">
+            <div class="radio-indicator" style="align-self:center"></div>
+            <div class="radio-title">Semanal</div>
+            <div class="radio-desc">Últimos 7 dias</div>
+          </div>
+          <div class="radio-card selected" style="align-items:center;text-align:center">
+            <div class="radio-indicator" style="align-self:center"></div>
+            <div class="radio-title">Mensal</div>
+            <div class="radio-desc">Últimos 30 dias</div>
+          </div>
+          <div class="radio-card" style="align-items:center;text-align:center">
+            <div class="radio-indicator" style="align-self:center"></div>
+            <div class="radio-title">Anual</div>
+            <div class="radio-desc">Últimos 12 meses</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================================================
+         6. BADGE CHOOSER
+         ============================================================ -->
+    <div class="section">
+      <div class="section-title">06 &mdash; Badges &amp; Badge Chooser</div>
+
+      <div class="component-card">
+        <h3>Badges (Informativo)</h3>
+        <div class="flex gap-3 flex-wrap" style="margin-bottom:var(--space-6)">
+          <span class="badge badge-primary">Ativo</span>
+          <span class="badge badge-green">Aprovado</span>
+          <span class="badge badge-accent">Em análise</span>
+          <span class="badge badge-gray">Rascunho</span>
+          <span class="badge badge-warning">Pendente</span>
+          <span class="badge badge-error">Rejeitado</span>
+          <span class="badge badge-success">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12l5 5L20 7"/></svg>
+            Concluído
+          </span>
+        </div>
+
+        <h3>Badge Chooser (Selecionável)</h3>
+        <p style="font-size:13px;color:var(--gray-500);margin-bottom:var(--space-4)">Selecione as categorias de produto:</p>
+        <div class="badge-chooser" style="margin-bottom:var(--space-6)">
+          <span class="badge-choice selected">Canabidiol</span>
+          <span class="badge-choice selected">Full Spectrum</span>
+          <span class="badge-choice">Isolado</span>
+          <span class="badge-choice">Broad Spectrum</span>
+          <span class="badge-choice">Tópico</span>
+          <span class="badge-choice disabled">Descontinuado</span>
+        </div>
+
+        <h3>Badge Chooser &mdash; Variante com Ícone</h3>
+        <div class="badge-chooser">
+          <span class="badge-choice">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M3 3h7l2 2h7a2 2 0 012 2v10a2 2 0 01-2 2H3a2 2 0 01-2-2V5a2 2 0 012-2z"/></svg>
+            Documentos
+          </span>
+          <span class="badge-choice selected">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/></svg>
+            Relatórios
+          </span>
+          <span class="badge-choice">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><path d="M3 9h18M9 21V9"/></svg>
+            Tabelas
+          </span>
+          <span class="badge-choice">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
+            Gráficos
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================================================
+         7. STATES OVERVIEW
+         ============================================================ -->
+    <div class="section">
+      <div class="section-title">07 &mdash; Estados Interativos</div>
+
+      <div class="component-card">
+        <h3>Mapa de Estados</h3>
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>Componente</th>
+                <th>Default</th>
+                <th>Hover</th>
+                <th>Pressed / Active</th>
+                <th>Disabled</th>
+                <th>Selected</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td style="font-weight:600">Btn Primary</td>
+                <td><span style="display:inline-block;padding:4px 12px;background:var(--primary-600);color:#fff;border-radius:6px;font-size:12px;font-weight:600">Label</span></td>
+                <td><span style="display:inline-block;padding:4px 12px;background:var(--primary-700);color:#fff;border-radius:6px;font-size:12px;font-weight:600;box-shadow:0 4px 12px rgba(85,88,212,0.3)">Label</span></td>
+                <td><span style="display:inline-block;padding:4px 12px;background:var(--primary-800);color:#fff;border-radius:6px;font-size:12px;font-weight:600">Label</span></td>
+                <td><span style="display:inline-block;padding:4px 12px;background:var(--primary-200);color:var(--primary-400);border-radius:6px;font-size:12px;font-weight:600">Label</span></td>
+                <td>&mdash;</td>
+              </tr>
+              <tr>
+                <td style="font-weight:600">Btn Secondary</td>
+                <td><span style="display:inline-block;padding:4px 12px;border:1.5px solid var(--primary-300);color:var(--primary-600);border-radius:6px;font-size:12px;font-weight:600">Label</span></td>
+                <td><span style="display:inline-block;padding:4px 12px;border:1.5px solid var(--primary-400);background:var(--primary-50);color:var(--primary-600);border-radius:6px;font-size:12px;font-weight:600">Label</span></td>
+                <td><span style="display:inline-block;padding:4px 12px;border:1.5px solid var(--primary-500);background:var(--primary-100);color:var(--primary-600);border-radius:6px;font-size:12px;font-weight:600">Label</span></td>
+                <td><span style="display:inline-block;padding:4px 12px;border:1.5px solid var(--gray-200);color:var(--gray-400);border-radius:6px;font-size:12px;font-weight:600">Label</span></td>
+                <td>&mdash;</td>
+              </tr>
+              <tr>
+                <td style="font-weight:600">Input</td>
+                <td><span style="display:inline-block;padding:4px 10px;border:1.5px solid var(--border-default);border-radius:6px;font-size:12px;color:var(--gray-400)">Placeholder</span></td>
+                <td><span style="display:inline-block;padding:4px 10px;border:1.5px solid var(--gray-400);border-radius:6px;font-size:12px;color:var(--gray-400)">Placeholder</span></td>
+                <td><span style="display:inline-block;padding:4px 10px;border:1.5px solid var(--primary-500);border-radius:6px;font-size:12px;color:var(--gray-900);box-shadow:0 0 0 3px var(--primary-100)">Texto</span></td>
+                <td><span style="display:inline-block;padding:4px 10px;border:1.5px solid var(--border-light);background:var(--gray-50);border-radius:6px;font-size:12px;color:var(--gray-400)">Disabled</span></td>
+                <td>&mdash;</td>
+              </tr>
+              <tr>
+                <td style="font-weight:600">Radio Card</td>
+                <td><span style="display:inline-block;padding:4px 10px;border:1.5px solid var(--border-default);border-radius:8px;font-size:12px">Card</span></td>
+                <td><span style="display:inline-block;padding:4px 10px;border:1.5px solid var(--primary-400);background:var(--primary-50);border-radius:8px;font-size:12px">Card</span></td>
+                <td>&mdash;</td>
+                <td><span style="display:inline-block;padding:4px 10px;border:1.5px solid var(--border-default);border-radius:8px;font-size:12px;opacity:0.5">Card</span></td>
+                <td><span style="display:inline-block;padding:4px 10px;border:1.5px solid var(--primary-600);background:var(--primary-50);border-radius:8px;font-size:12px;box-shadow:0 0 0 3px var(--primary-100)">Card</span></td>
+              </tr>
+              <tr>
+                <td style="font-weight:600">Badge Choice</td>
+                <td><span class="badge-choice" style="font-size:11px;padding:3px 10px">Tag</span></td>
+                <td><span class="badge-choice" style="font-size:11px;padding:3px 10px;border-color:var(--primary-400);color:var(--primary-700);background:var(--primary-50)">Tag</span></td>
+                <td>&mdash;</td>
+                <td><span class="badge-choice disabled" style="font-size:11px;padding:3px 10px">Tag</span></td>
+                <td><span class="badge-choice selected" style="font-size:11px;padding:3px 10px">Tag</span></td>
+              </tr>
+              <tr>
+                <td style="font-weight:600">Toggle</td>
+                <td><div class="toggle-switch" style="transform:scale(0.75)"></div></td>
+                <td>&mdash;</td>
+                <td>&mdash;</td>
+                <td><div class="toggle-switch disabled" style="transform:scale(0.75)"></div></td>
+                <td><div class="toggle-switch active" style="transform:scale(0.75)"></div></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================================================
+         8. TOGGLE, CHECKBOX, TABS
+         ============================================================ -->
+    <div class="section">
+      <div class="section-title">08 &mdash; Controles &amp; Navegação</div>
+
+      <div class="grid-2">
+        <div class="component-card">
+          <h3>Toggle Switch</h3>
+          <div class="flex flex-col gap-5">
+            <div class="flex items-center gap-4">
+              <div class="toggle-switch active"></div>
+              <span style="font-size:14px;color:var(--gray-800)">Notificações ativas</span>
+            </div>
+            <div class="flex items-center gap-4">
+              <div class="toggle-switch"></div>
+              <span style="font-size:14px;color:var(--gray-800)">Modo escuro</span>
+            </div>
+            <div class="flex items-center gap-4">
+              <div class="toggle-switch disabled"></div>
+              <span style="font-size:14px;color:var(--gray-400)">Recurso indisponível</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="component-card">
+          <h3>Checkbox</h3>
+          <div class="flex flex-col gap-4">
+            <div class="checkbox checked">
+              <div class="checkbox-box">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7"/></svg>
+              </div>
+              <span>Aceito os termos de uso</span>
+            </div>
+            <div class="checkbox">
+              <div class="checkbox-box"></div>
+              <span>Receber novidades por e-mail</span>
+            </div>
+            <div class="checkbox checked">
+              <div class="checkbox-box">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7"/></svg>
+              </div>
+              <span>Lembrar preferências</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="component-card">
+        <h3>Tabs</h3>
+        <div class="tabs" style="margin-bottom:var(--space-5)">
+          <div class="tab active">Visão Geral</div>
+          <div class="tab">Produtos</div>
+          <div class="tab">Financeiro</div>
+          <div class="tab">Equipe</div>
+        </div>
+        <div style="padding:var(--space-4);font-size:14px;color:var(--gray-600)">
+          Conteúdo da aba "Visão Geral" aparece aqui. Tabs permitem navegar entre seções de conteúdo sem mudar de página.
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================================================
+         9. CARDS & DATA DISPLAY
+         ============================================================ -->
+    <div class="section">
+      <div class="section-title">09 &mdash; Cards &amp; Dados</div>
+
+      <div class="component-card">
+        <h3>Stat Cards (KPIs)</h3>
+        <div class="grid-4" style="margin-bottom:var(--space-6)">
+          <div class="stat-card">
+            <div class="stat-label">Receita Mensal</div>
+            <div class="stat-value">R$ 847k</div>
+            <div class="stat-change up">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:14px;height:14px"><path d="M7 17l5-5 5 5M7 7l5 5 5-5"/></svg>
+              +12,5%
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Pacientes Ativos</div>
+            <div class="stat-value">3.248</div>
+            <div class="stat-change up">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:14px;height:14px"><path d="M7 17l5-5 5 5M7 7l5 5 5-5"/></svg>
+              +8,3%
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Novos Cadastros</div>
+            <div class="stat-value">156</div>
+            <div class="stat-change down">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:14px;height:14px;transform:rotate(180deg)"><path d="M7 17l5-5 5 5M7 7l5 5 5-5"/></svg>
+              -2,1%
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">NPS Score</div>
+            <div class="stat-value" style="color:var(--green-600)">92</div>
+            <div class="stat-change up">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:14px;height:14px"><path d="M7 17l5-5 5 5M7 7l5 5 5-5"/></svg>
+              +3 pts
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="component-card">
+        <h3>Card com Header e Footer</h3>
+        <div class="card" style="max-width:480px">
+          <div class="card-header">
+            <h4>Detalhes do Produto</h4>
+            <span class="badge badge-green">Ativo</span>
+          </div>
+          <div class="card-body">
+            <div class="flex flex-col gap-4">
+              <div class="input-group">
+                <label class="input-label">Nome do Produto</label>
+                <input type="text" class="input-field" value="Canabidiol 200mg/mL">
+              </div>
+              <div class="input-group">
+                <label class="input-label">Concentração</label>
+                <select class="input-field input-select">
+                  <option selected>200mg/mL</option>
+                  <option>100mg/mL</option>
+                  <option>50mg/mL</option>
+                </select>
+              </div>
+            </div>
+          </div>
+          <div class="card-footer">
+            <button class="btn btn-ghost btn-sm">Cancelar</button>
+            <button class="btn btn-primary btn-sm">Salvar</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="component-card">
+        <h3>Tabela de Dados</h3>
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>Produto</th>
+                <th>SKU</th>
+                <th>Status</th>
+                <th>Estoque</th>
+                <th>Preço</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td style="font-weight:500">Canabidiol 200mg/mL</td>
+                <td style="font-family:monospace;font-size:13px;color:var(--gray-600)">EL-CBD-200</td>
+                <td><span class="badge badge-green">Ativo</span></td>
+                <td>1.240</td>
+                <td>R$ 289,90</td>
+              </tr>
+              <tr>
+                <td style="font-weight:500">Full Spectrum 150mg/mL</td>
+                <td style="font-family:monospace;font-size:13px;color:var(--gray-600)">EL-FS-150</td>
+                <td><span class="badge badge-green">Ativo</span></td>
+                <td>890</td>
+                <td>R$ 349,90</td>
+              </tr>
+              <tr>
+                <td style="font-weight:500">CBD Tópico 50mg</td>
+                <td style="font-family:monospace;font-size:13px;color:var(--gray-600)">EL-TOP-50</td>
+                <td><span class="badge badge-warning">Baixo Estoque</span></td>
+                <td style="color:var(--warning)">42</td>
+                <td>R$ 159,90</td>
+              </tr>
+              <tr>
+                <td style="font-weight:500">Isolado 100mg/mL</td>
+                <td style="font-family:monospace;font-size:13px;color:var(--gray-600)">EL-ISO-100</td>
+                <td><span class="badge badge-gray">Rascunho</span></td>
+                <td>0</td>
+                <td>R$ 199,90</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================================================
+         10. ALERTS
+         ============================================================ -->
+    <div class="section">
+      <div class="section-title">10 &mdash; Alertas &amp; Notificações</div>
+
+      <div class="component-card">
+        <div class="flex flex-col gap-4">
+          <div class="alert alert-info">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+            <div><strong>Informação:</strong> O relatório mensal estará disponível até o dia 5 do próximo mês.</div>
+          </div>
+          <div class="alert alert-success">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><path d="M22 4L12 14.01l-3-3"/></svg>
+            <div><strong>Sucesso!</strong> O produto foi cadastrado com sucesso no sistema.</div>
+          </div>
+          <div class="alert alert-warning">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg>
+            <div><strong>Atenção:</strong> O estoque de CBD Tópico está abaixo do nível mínimo.</div>
+          </div>
+          <div class="alert alert-error">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M15 9l-6 6M9 9l6 6"/></svg>
+            <div><strong>Erro:</strong> Não foi possível processar o pagamento. Tente novamente.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================================================
+         11. PROGRESS & AVATARS
+         ============================================================ -->
+    <div class="section">
+      <div class="section-title">11 &mdash; Progress &amp; Avatares</div>
+
+      <div class="grid-2">
+        <div class="component-card">
+          <h3>Progress Bars</h3>
+          <div class="flex flex-col gap-5">
+            <div>
+              <div class="flex items-center" style="justify-content:space-between;margin-bottom:var(--space-2)">
+                <span style="font-size:13px;font-weight:500;color:var(--gray-700)">Meta de Vendas</span>
+                <span style="font-size:13px;font-weight:600;color:var(--primary-600)">78%</span>
+              </div>
+              <div class="progress-bar">
+                <div class="progress-fill primary" style="width:78%"></div>
+              </div>
+            </div>
+            <div>
+              <div class="flex items-center" style="justify-content:space-between;margin-bottom:var(--space-2)">
+                <span style="font-size:13px;font-weight:500;color:var(--gray-700)">Aprovação ANVISA</span>
+                <span style="font-size:13px;font-weight:600;color:var(--green-600)">100%</span>
+              </div>
+              <div class="progress-bar">
+                <div class="progress-fill green" style="width:100%"></div>
+              </div>
+            </div>
+            <div>
+              <div class="flex items-center" style="justify-content:space-between;margin-bottom:var(--space-2)">
+                <span style="font-size:13px;font-weight:500;color:var(--gray-700)">Pesquisa Clínica</span>
+                <span style="font-size:13px;font-weight:600;color:var(--accent-600)">45%</span>
+              </div>
+              <div class="progress-bar">
+                <div class="progress-fill accent" style="width:45%"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="component-card">
+          <h3>Avatares</h3>
+          <div class="flex gap-4 items-center" style="margin-bottom:var(--space-5)">
+            <div class="avatar avatar-sm">JS</div>
+            <div class="avatar">MR</div>
+            <div class="avatar avatar-lg">AL</div>
+            <div class="avatar avatar-lg" style="background:var(--green-100);color:var(--green-700)">EL</div>
+            <div class="avatar avatar-lg" style="background:var(--accent-100);color:var(--accent-700)">DP</div>
+          </div>
+          <h3>Tooltip (hover)</h3>
+          <div class="flex gap-4" style="margin-top:var(--space-4)">
+            <div class="tooltip-demo">
+              <button class="btn btn-secondary btn-sm">Hover me</button>
+              <span class="tooltip-text">Esta é uma tooltip</span>
+            </div>
+            <div class="tooltip-demo">
+              <div class="avatar">EL</div>
+              <span class="tooltip-text">Ease Labs</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================================================
+         12. SIDEBAR PREVIEW
+         ============================================================ -->
+    <div class="section">
+      <div class="section-title">12 &mdash; Sidebar de Navegação (Preview)</div>
+
+      <div class="component-card">
+        <div class="flex gap-6">
+          <div class="sidebar-preview">
+            <div class="sidebar-logo">
+              <img src="../assets/LOGO.webp"
+                   alt="Ease Labs Pharma"
+                   style="height:28px;filter:brightness(0) invert(1);display:block">
+            </div>
+
+            <div class="nav-section">Principal</div>
+            <div class="nav-item active">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+              Dashboard
+            </div>
+            <div class="nav-item">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
+              Analytics
+            </div>
+            <div class="nav-item">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><path d="M7 7h.01"/></svg>
+              Produtos
+            </div>
+
+            <div class="nav-section">Gestão</div>
+            <div class="nav-item">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
+              Pacientes
+            </div>
+            <div class="nav-item">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/></svg>
+              Relatórios
+            </div>
+            <div class="nav-item">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+              Configurações
+            </div>
+          </div>
+
+          <div style="flex:1;padding:var(--space-4)">
+            <p style="font-size:14px;color:var(--gray-600);line-height:1.7">
+              A sidebar usa o fundo escuro (<code style="font-size:12px;background:var(--gray-100);padding:2px 6px;border-radius:4px">--gray-900: #1A1D2E</code>) com texto claro, criando contraste com a área principal de conteúdo.
+            </p>
+            <p style="font-size:14px;color:var(--gray-600);line-height:1.7;margin-top:var(--space-3)">
+              O item ativo usa o <code style="font-size:12px;background:var(--gray-100);padding:2px 6px;border-radius:4px">--primary-600</code> como background, mantendo consistência com a paleta da marca.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================================================
+         13. SPACING & RADIUS
+         ============================================================ -->
+    <div class="section">
+      <div class="section-title">13 &mdash; Espaçamentos &amp; Bordas</div>
+
+      <div class="grid-2">
+        <div class="component-card">
+          <h3>Escala de Espaçamento</h3>
+          <div class="space-demo"><span class="space-label">space-1</span><div class="space-block" style="width:4px;height:20px"></div><span class="space-value">4px</span></div>
+          <div class="space-demo"><span class="space-label">space-2</span><div class="space-block" style="width:8px;height:20px"></div><span class="space-value">8px</span></div>
+          <div class="space-demo"><span class="space-label">space-3</span><div class="space-block" style="width:12px;height:20px"></div><span class="space-value">12px</span></div>
+          <div class="space-demo"><span class="space-label">space-4</span><div class="space-block" style="width:16px;height:20px"></div><span class="space-value">16px</span></div>
+          <div class="space-demo"><span class="space-label">space-5</span><div class="space-block" style="width:20px;height:20px"></div><span class="space-value">20px</span></div>
+          <div class="space-demo"><span class="space-label">space-6</span><div class="space-block" style="width:24px;height:20px"></div><span class="space-value">24px</span></div>
+          <div class="space-demo"><span class="space-label">space-8</span><div class="space-block" style="width:32px;height:20px"></div><span class="space-value">32px</span></div>
+          <div class="space-demo"><span class="space-label">space-10</span><div class="space-block" style="width:40px;height:20px"></div><span class="space-value">40px</span></div>
+          <div class="space-demo"><span class="space-label">space-12</span><div class="space-block" style="width:48px;height:20px"></div><span class="space-value">48px</span></div>
+          <div class="space-demo"><span class="space-label">space-16</span><div class="space-block" style="width:64px;height:20px"></div><span class="space-value">64px</span></div>
+        </div>
+
+        <div class="component-card">
+          <h3>Border Radius</h3>
+          <div class="flex flex-wrap gap-5" style="margin-bottom:var(--space-8)">
+            <div style="text-align:center">
+              <div style="width:64px;height:64px;background:var(--primary-100);border:2px solid var(--primary-300);border-radius:var(--radius-sm)"></div>
+              <div style="font-size:11px;font-weight:600;color:var(--gray-600);margin-top:6px">sm</div>
+              <div style="font-size:10px;color:var(--gray-500)">6px</div>
+            </div>
+            <div style="text-align:center">
+              <div style="width:64px;height:64px;background:var(--primary-100);border:2px solid var(--primary-300);border-radius:var(--radius-md)"></div>
+              <div style="font-size:11px;font-weight:600;color:var(--gray-600);margin-top:6px">md</div>
+              <div style="font-size:10px;color:var(--gray-500)">8px</div>
+            </div>
+            <div style="text-align:center">
+              <div style="width:64px;height:64px;background:var(--primary-100);border:2px solid var(--primary-300);border-radius:var(--radius-lg)"></div>
+              <div style="font-size:11px;font-weight:600;color:var(--gray-600);margin-top:6px">lg</div>
+              <div style="font-size:10px;color:var(--gray-500)">12px</div>
+            </div>
+            <div style="text-align:center">
+              <div style="width:64px;height:64px;background:var(--primary-100);border:2px solid var(--primary-300);border-radius:var(--radius-xl)"></div>
+              <div style="font-size:11px;font-weight:600;color:var(--gray-600);margin-top:6px">xl</div>
+              <div style="font-size:10px;color:var(--gray-500)">16px</div>
+            </div>
+            <div style="text-align:center">
+              <div style="width:64px;height:64px;background:var(--primary-100);border:2px solid var(--primary-300);border-radius:var(--radius-full)"></div>
+              <div style="font-size:11px;font-weight:600;color:var(--gray-600);margin-top:6px">full</div>
+              <div style="font-size:10px;color:var(--gray-500)">9999px</div>
+            </div>
+          </div>
+
+          <h3>Shadows</h3>
+          <div class="flex flex-wrap gap-5">
+            <div style="text-align:center">
+              <div style="width:80px;height:60px;background:white;border-radius:var(--radius-md);box-shadow:var(--shadow-xs)"></div>
+              <div style="font-size:11px;font-weight:600;color:var(--gray-600);margin-top:6px">xs</div>
+            </div>
+            <div style="text-align:center">
+              <div style="width:80px;height:60px;background:white;border-radius:var(--radius-md);box-shadow:var(--shadow-sm)"></div>
+              <div style="font-size:11px;font-weight:600;color:var(--gray-600);margin-top:6px">sm</div>
+            </div>
+            <div style="text-align:center">
+              <div style="width:80px;height:60px;background:white;border-radius:var(--radius-md);box-shadow:var(--shadow-md)"></div>
+              <div style="font-size:11px;font-weight:600;color:var(--gray-600);margin-top:6px">md</div>
+            </div>
+            <div style="text-align:center">
+              <div style="width:80px;height:60px;background:white;border-radius:var(--radius-md);box-shadow:var(--shadow-lg)"></div>
+              <div style="font-size:11px;font-weight:600;color:var(--gray-600);margin-top:6px">lg</div>
+            </div>
+            <div style="text-align:center">
+              <div style="width:80px;height:60px;background:white;border-radius:var(--radius-md);box-shadow:var(--shadow-xl)"></div>
+              <div style="font-size:11px;font-weight:600;color:var(--gray-600);margin-top:6px">xl</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================================================
+         14. IDENTITY — GRADIENTS
+         ============================================================ -->
+    <div class="section">
+      <div class="section-title">14 &mdash; Identidade &mdash; Gradiente</div>
+      <p class="section-desc">O gradiente institucional da Ease Labs conecta o verde (natureza, saúde) ao indigo (ciência, tecnologia). Ele é o elemento de assinatura visual usado em bordas, botões e destaques dos dashboards.</p>
+
+      <!-- Gradient Palette -->
+      <div class="component-card">
+        <h3>Gradientes da Marca</h3>
+        <div class="grid-2" style="margin-bottom:var(--space-6)">
+          <div>
+            <div class="gradient-swatch" style="background:linear-gradient(180deg, #6ECC64, #5661E8)">
+              <div class="flex flex-col gap-1">
+                <span class="gradient-label">Brand Vertical</span>
+                <span class="gradient-code">180deg: #6ECC64 &rarr; #5661E8</span>
+              </div>
+            </div>
+            <div style="font-size:11px;color:var(--gray-500);margin-top:6px;font-weight:500">Uso: border-left de headers, barras laterais</div>
+          </div>
+          <div>
+            <div class="gradient-swatch" style="background:linear-gradient(135deg, #5661E8, #6ECC64)">
+              <div class="flex flex-col gap-1">
+                <span class="gradient-label">Brand Diagonal</span>
+                <span class="gradient-code">135deg: #5661E8 &rarr; #6ECC64</span>
+              </div>
+            </div>
+            <div style="font-size:11px;color:var(--gray-500);margin-top:6px;font-weight:500">Uso: botões CTA, textos em destaque</div>
+          </div>
+          <div>
+            <div class="gradient-swatch" style="background:linear-gradient(90deg, #6ECC64, #5661E8)">
+              <div class="flex flex-col gap-1">
+                <span class="gradient-label">Brand Horizontal</span>
+                <span class="gradient-code">90deg: #6ECC64 &rarr; #5661E8</span>
+              </div>
+            </div>
+            <div style="font-size:11px;color:var(--gray-500);margin-top:6px;font-weight:500">Uso: dividers, progress bars, linhas decorativas</div>
+          </div>
+          <div>
+            <div class="gradient-swatch" style="background:linear-gradient(135deg, #5661E8 0%, #7B83E8 50%, #6ECC64 100%)">
+              <div class="flex flex-col gap-1">
+                <span class="gradient-label">Brand Extended</span>
+                <span class="gradient-code">135deg: #5661E8 &rarr; #7B83E8 &rarr; #6ECC64</span>
+              </div>
+            </div>
+            <div style="font-size:11px;color:var(--gray-500);margin-top:6px;font-weight:500">Uso: backgrounds amplos, covers, banners</div>
+          </div>
+        </div>
+
+        <!-- Color anchors -->
+        <h3>Pontos de Ancoragem</h3>
+        <div class="flex gap-6 items-center" style="margin-bottom:var(--space-4)">
+          <div class="flex items-center gap-3">
+            <div style="width:40px;height:40px;border-radius:50%;background:#6ECC64;box-shadow:0 2px 8px rgba(110,204,100,0.35)"></div>
+            <div>
+              <div style="font-size:13px;font-weight:600;color:var(--gray-800)">Green Anchor</div>
+              <div style="font-size:11px;color:var(--gray-500);font-family:monospace">#6ECC64</div>
+            </div>
+          </div>
+          <div style="flex:1;max-width:200px">
+            <div style="height:4px;border-radius:2px;background:linear-gradient(90deg, #6ECC64, #5661E8)"></div>
+          </div>
+          <div class="flex items-center gap-3">
+            <div style="width:40px;height:40px;border-radius:50%;background:#5661E8;box-shadow:0 2px 8px rgba(86,97,232,0.35)"></div>
+            <div>
+              <div style="font-size:13px;font-weight:600;color:var(--gray-800)">Indigo Anchor</div>
+              <div style="font-size:11px;color:var(--gray-500);font-family:monospace">#5661E8</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Corp Header Component -->
+      <div class="component-card">
+        <h3>Corp Header (Assinatura Visual)</h3>
+        <p style="font-size:13px;color:var(--gray-500);margin-bottom:var(--space-5)">Header corporativo com borda-esquerda gradiente. Componente de assinatura para topos de painéis e seções dos dashboards.</p>
+
+        <div class="corp-header">
+          <div>
+            <div class="corp-title">Painel de Vendas</div>
+            <div class="corp-subtitle">Atualizado em 26/02/2026 &bull; Dados consolidados</div>
+          </div>
+          <div class="flex gap-3">
+            <button class="btn btn-ghost btn-sm">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+              Exportar
+            </button>
+            <button class="btn btn-primary btn-sm">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><path d="M12 5v14M5 12h14"/></svg>
+              Novo
+            </button>
+          </div>
+        </div>
+
+        <div class="corp-header">
+          <div>
+            <div class="corp-title">Relatório de Pacientes</div>
+            <div class="corp-subtitle">3.248 pacientes ativos &bull; Regional SP</div>
+          </div>
+          <span class="badge badge-green">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:12px;height:12px"><path d="M5 12l5 5L20 7"/></svg>
+            Atualizado
+          </span>
+        </div>
+
+        <div class="corp-header" style="animation-delay:0.1s">
+          <div>
+            <div class="corp-title">Controle de Estoque</div>
+            <div class="corp-subtitle">5 produtos com estoque baixo</div>
+          </div>
+          <span class="badge badge-warning">Atenção</span>
+        </div>
+
+        <!-- CSS code reference -->
+        <div style="background:var(--gray-900);border-radius:var(--radius-md);padding:var(--space-5);margin-top:var(--space-4);overflow-x:auto">
+          <pre style="margin:0;font-size:12px;line-height:1.7;color:#ABB1F4;font-family:'Fira Code',Consolas,monospace"><span style="color:#6FD696">.corp-header</span> {
+  <span style="color:#9CA1B8">display:</span> flex;
+  <span style="color:#9CA1B8">align-items:</span> center;
+  <span style="color:#9CA1B8">justify-content:</span> space-between;
+  <span style="color:#9CA1B8">padding:</span> <span style="color:#F5A623">18px</span> <span style="color:#F5A623">28px</span>;
+  <span style="color:#9CA1B8">background:</span> <span style="color:#E5E5E5">#FFFFFF</span>;
+  <span style="color:#9CA1B8">border-radius:</span> <span style="color:#F5A623">12px</span>;
+  <span style="color:#9CA1B8">border:</span> <span style="color:#F5A623">1px</span> solid <span style="color:#E5E5E5">#EEEEF2</span>;
+  <span style="color:#9CA1B8">box-shadow:</span> <span style="color:#F5A623">0 2px 12px</span> <span style="color:#7B83E8">rgba(11,12,42,0.06)</span>;
+  <span style="color:#9CA1B8">border-left:</span> <span style="color:#F5A623">4px</span> solid transparent;
+  <span style="color:#9CA1B8">border-image:</span> <span style="color:#6FD696">linear-gradient</span>(<span style="color:#F5A623">180deg</span>, <span style="color:#6ECC64">#6ECC64</span>, <span style="color:#5661E8">#5661E8</span>) <span style="color:#F5A623">1</span>;
+  <span style="color:#9CA1B8">animation:</span> fadeInUp <span style="color:#F5A623">0.45s</span> ease-out;
+}</pre>
+        </div>
+      </div>
+
+      <!-- Gradient Buttons -->
+      <div class="component-card">
+        <h3>Botões com Gradiente</h3>
+        <div class="flex gap-4 flex-wrap items-center" style="margin-bottom:var(--space-6)">
+          <button class="btn-gradient">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><path d="M5 12l5 5L20 7"/></svg>
+            Acesse a Área Médica
+          </button>
+          <button class="btn-gradient" style="padding:10px 22px;font-size:13px;border-radius:var(--radius-md)">
+            Confirmar Pedido
+          </button>
+          <button class="btn-gradient" style="padding:8px 18px;font-size:12px">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><path d="M12 5v14M5 12h14"/></svg>
+            Novo
+          </button>
+        </div>
+
+        <h3>Texto com Gradiente</h3>
+        <div style="margin-bottom:var(--space-6)">
+          <div class="text-gradient" style="font-size:36px;font-weight:800;letter-spacing:-1px;margin-bottom:var(--space-2)">NOVAS FERRAMENTAS</div>
+          <div class="text-gradient" style="font-size:22px;font-weight:700">R$ 1.250.000,00</div>
+        </div>
+
+        <h3>Divider Gradiente</h3>
+        <div class="flex flex-col gap-5" style="margin-bottom:var(--space-6)">
+          <div>
+            <hr class="gradient-divider">
+            <div style="font-size:11px;color:var(--gray-500);margin-top:6px">Full width</div>
+          </div>
+          <div>
+            <hr class="gradient-divider" style="width:50%">
+            <div style="font-size:11px;color:var(--gray-500);margin-top:6px">50% width</div>
+          </div>
+          <div>
+            <hr class="gradient-divider" style="width:120px">
+            <div style="font-size:11px;color:var(--gray-500);margin-top:6px">Accent (120px)</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Gradient Border Card -->
+      <div class="component-card">
+        <h3>Card com Borda Gradiente</h3>
+        <div class="grid-2">
+          <div class="gradient-border-card">
+            <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--gray-500);margin-bottom:var(--space-2)">Receita Total</div>
+            <div class="text-gradient" style="font-size:32px;font-weight:700;letter-spacing:-0.5px">R$ 847.320</div>
+            <div style="font-size:13px;color:var(--green-600);font-weight:600;margin-top:var(--space-2)">+12,5% vs. mês anterior</div>
+          </div>
+          <div class="gradient-border-card">
+            <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--gray-500);margin-bottom:var(--space-2)">NPS Score</div>
+            <div class="text-gradient" style="font-size:32px;font-weight:700;letter-spacing:-0.5px">92 pts</div>
+            <div style="font-size:13px;color:var(--green-600);font-weight:600;margin-top:var(--space-2)">Meta: 85 pts</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Usage Guidelines -->
+      <div class="component-card">
+        <h3>Guia de Uso do Gradiente</h3>
+        <div class="grid-3">
+          <div>
+            <div style="font-size:13px;font-weight:600;color:var(--green-700);margin-bottom:var(--space-2)">Usar</div>
+            <ul style="font-size:13px;color:var(--gray-700);line-height:2;list-style:none;padding:0">
+              <li>&#10003;&ensp;Borda esquerda de headers</li>
+              <li>&#10003;&ensp;Botões CTA de destaque</li>
+              <li>&#10003;&ensp;Separadores decorativos</li>
+              <li>&#10003;&ensp;Textos de KPI em destaque</li>
+              <li>&#10003;&ensp;Bordas de cards especiais</li>
+            </ul>
+          </div>
+          <div>
+            <div style="font-size:13px;font-weight:600;color:var(--warning);margin-bottom:var(--space-2)">Com moderação</div>
+            <ul style="font-size:13px;color:var(--gray-700);line-height:2;list-style:none;padding:0">
+              <li>&#9888;&ensp;Backgrounds de seções</li>
+              <li>&#9888;&ensp;Badges selecionáveis</li>
+              <li>&#9888;&ensp;Ícones grandes</li>
+            </ul>
+          </div>
+          <div>
+            <div style="font-size:13px;font-weight:600;color:var(--error);margin-bottom:var(--space-2)">Evitar</div>
+            <ul style="font-size:13px;color:var(--gray-700);line-height:2;list-style:none;padding:0">
+              <li>&#10007;&ensp;Texto corrido (body)</li>
+              <li>&#10007;&ensp;Backgrounds de formulários</li>
+              <li>&#10007;&ensp;Uso excessivo na mesma tela</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================================================
+         FOOTER
+         ============================================================ -->
+    <div style="text-align:center;padding:var(--space-10) 0;color:var(--gray-400);font-size:12px">
+      <div style="font-weight:600;color:var(--gray-600);margin-bottom:4px">Ease Labs &mdash; UI System v1.0</div>
+      Dashboard Component Map &bull; Fevereiro 2026
+    </div>
+
+  </div>
+</body>
+</html>

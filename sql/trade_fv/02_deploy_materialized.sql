@@ -10,10 +10,15 @@
 --        -> fato_adequacao_estoque (MATVIEW)     [le a matview fato_todos_pdvs]
 -- ================================================================================
 
--- 1) Remove as views atuais (ordem reversa de dependencia)
-DROP VIEW IF EXISTS trade_fv.fato_adequacao_estoque;
-DROP VIEW IF EXISTS trade_fv.fato_todos_pdvs;
-DROP VIEW IF EXISTS trade_fv.fato_cdd_90_dias_agrupada;
+-- 1) Remove os objetos atuais (ordem reversa de dependencia).
+--    CASCADE no matview do topo derruba as VIEWs dependentes (unpivot e
+--    unpivot_ajustada) -- recrie-as depois rodando 04_unpivot.sql e
+--    06_sugestao_workflow.sql. Este arquivo eh re-executavel: eh a fonte
+--    unica do matview fato_adequacao_estoque (nao criar migracoes que
+--    dupliquem este corpo -- editar aqui e re-rodar).
+DROP MATERIALIZED VIEW IF EXISTS trade_fv.fato_adequacao_estoque CASCADE;
+DROP MATERIALIZED VIEW IF EXISTS trade_fv.fato_todos_pdvs CASCADE;
+DROP MATERIALIZED VIEW IF EXISTS trade_fv.fato_cdd_90_dias_agrupada CASCADE;
 
 -- ================================================================================
 -- 2) MATERIALIZED VIEW: fato_cdd_90_dias_agrupada
@@ -258,6 +263,7 @@ CREATE MATERIALIZED VIEW trade_fv.fato_adequacao_estoque AS
             COALESCE(b."Sell-out Isolado 30 mL", 0::double precision) / 3.0::double precision AS "Média Mensal Isolado 30 mL",
             COALESCE(b."Sell-out Isolado 10 mL", 0::double precision) / 3.0::double precision AS "Média Mensal Isolado 10 mL",
             COALESCE(b."Sell-out Extrato", 0::double precision) / 3.0::double precision AS "Média Mensal Extrato",
+            COALESCE(b."Sell-out Isolado 20 mg 30 mL", 0::double precision) / 3.0::double precision AS "Média Mensal Isolado 20 mg 30 mL",
                 CASE
                     WHEN (b.provedor_pdv = ANY (ARRAY['ARAUJO'::text, 'CLAMED'::text, 'DPSP'::text, 'DROGAL'::text, 'INDIANA'::text, 'PAGUEMENOS'::text, 'PANVEL'::text, 'RAIA'::text, 'SAOJOAO'::text, 'VENANCIO'::text])) AND (
                     CASE
@@ -325,6 +331,7 @@ CREATE MATERIALIZED VIEW trade_fv.fato_adequacao_estoque AS
             c."Média Mensal Isolado 30 mL",
             c."Média Mensal Isolado 10 mL",
             c."Média Mensal Extrato",
+            c."Média Mensal Isolado 20 mg 30 mL",
             c."Estoque Ideal Isolado 30 mL",
             c."Estoque Ideal Isolado 10 mL",
             c."Estoque Ideal Extrato",
@@ -358,6 +365,7 @@ CREATE MATERIALIZED VIEW trade_fv.fato_adequacao_estoque AS
             d1."Média Mensal Isolado 30 mL",
             d1."Média Mensal Isolado 10 mL",
             d1."Média Mensal Extrato",
+            d1."Média Mensal Isolado 20 mg 30 mL",
             d1."Estoque Ideal Isolado 30 mL",
             d1."Estoque Ideal Isolado 10 mL",
             d1."Estoque Ideal Extrato",
@@ -394,6 +402,7 @@ CREATE MATERIALIZED VIEW trade_fv.fato_adequacao_estoque AS
     "Média Mensal Isolado 30 mL",
     "Média Mensal Isolado 10 mL",
     "Média Mensal Extrato",
+    "Média Mensal Isolado 20 mg 30 mL",
     "Estoque Ideal Isolado 30 mL",
     "Estoque Ideal Isolado 10 mL",
     "Estoque Ideal Extrato",

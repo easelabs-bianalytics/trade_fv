@@ -15,7 +15,8 @@ WITH u AS (
         "COBERTURA FV?"                       AS "Cobertura FV",
         "STATUS_PARAMETRIZADO"                AS "Status",
         "Isolado 30 mL"                       AS "Estoque Atual",
-        "Estoque Ideal Final Isolado 30 mL"   AS "Estoque Ideal"
+        "Estoque Ideal Final Isolado 30 mL"   AS "Estoque Ideal",
+        "Média Mensal Isolado 30 mL"          AS "Média Mensal"
     FROM trade_fv.fato_adequacao_estoque
 
     UNION ALL
@@ -25,7 +26,8 @@ WITH u AS (
         'Isolado 10 mL'::text,
         "COBERTURA FV?", "STATUS_PARAMETRIZADO",
         "Isolado 10 mL",
-        "Estoque Ideal Final Isolado 10 mL"
+        "Estoque Ideal Final Isolado 10 mL",
+        "Média Mensal Isolado 10 mL"
     FROM trade_fv.fato_adequacao_estoque
 
     UNION ALL
@@ -35,7 +37,8 @@ WITH u AS (
         'Isolado 20 mg 30 mL'::text,
         "COBERTURA FV?", "STATUS_PARAMETRIZADO",
         "Isolado 20 mg 30 mL",
-        "Estoque Ideal Final Isolado 20 mg 30 mL"
+        "Estoque Ideal Final Isolado 20 mg 30 mL",
+        "Média Mensal Isolado 20 mg 30 mL"
     FROM trade_fv.fato_adequacao_estoque
 
     UNION ALL
@@ -45,7 +48,8 @@ WITH u AS (
         'Extrato'::text,
         "COBERTURA FV?", "STATUS_PARAMETRIZADO",
         "Extrato",
-        "Estoque Ideal Final Extrato"
+        "Estoque Ideal Final Extrato",
+        "Média Mensal Extrato"
     FROM trade_fv.fato_adequacao_estoque
 )
 SELECT
@@ -82,5 +86,7 @@ SELECT
              AND COALESCE(u."Estoque Ideal",0) = 0
             THEN 'Inativar'
         ELSE 'Diminuir VB'
-    END AS "Ajuste"
+    END AS "Ajuste",
+    -- Média Mensal (unidades/mês) do SKU — métrica qualitativa de apoio
+    u."Média Mensal"
 FROM u;

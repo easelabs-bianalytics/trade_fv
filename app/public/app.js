@@ -11,8 +11,20 @@
     bia: false,         // admin ajustando VB diretamente como BI&A
     redes: [],          // redes da base de adequação (p/ cadastro manual)
     pdv: null,          // detalhe retornado por /api/pdv/:cnpj (ou montado manualmente)
-    skuSelecionado: null, // ean
-    vb: 1,
+    selecionados: {},   // SKUs marcados na etapa 4: { ean: vb }
+    painelAtual: null,  // painel ativo (para marcar o item do nav)
+    pendentes: 0,       // badge de sugestões pendentes (admin)
+  };
+
+  // rotas que ganham container largo (tabelas)
+  const ROTAS_LARGAS = ['aprovacoes', 'usuarios', 'sugestoes'];
+
+  // título da aba por página
+  const TITULO_PAGINA = {
+    'login': 'Entrar', 'admin': 'Painel', 'aprovacoes': 'Aprovações',
+    'usuarios': 'Usuários', 'sugestoes': 'Minhas sugestões', 'senha': 'Alterar senha',
+    1: 'Escolher representante', 2: 'Buscar PDV', 3: 'Validar PDV',
+    4: 'Sugerir VB', 5: 'Sugestão enviada',
   };
 
   const SKUS = [
@@ -44,6 +56,35 @@
     'VENANCIO':   'Venâncio',
   };
   const redeLabel = (r) => REDE_LABEL[r] || titleCase(r || '');
+
+  // Identidade visual de cada rede. `cor` é a cor predominante da própria logo
+  // (extraída por scripts/normalizar_logos.py); `textoEscuro` marca as cores
+  // claras demais para texto branco — nesses casos o texto vira grafite.
+  // As logos ficam em public/redes/<codigo em minúsculas>.png, já normalizadas
+  // pelo script para todas ocuparem a mesma proporção do quadrado.
+  const REDE_MARCA = {
+    'ARAUJO':     { cor: '#07419F' },
+    'CLAMED':     { cor: '#054E31' },
+    'DPSP':       { cor: '#2E3344' },
+    'DROGAL':     { cor: '#FEE24B', textoEscuro: true },
+    'INDIANA':    { cor: '#072AC6' },
+    'PAGUEMENOS': { cor: '#0200BE' },
+    'PANVEL':     { cor: '#002A89' },
+    'RAIA':       { cor: '#E01E3B' },
+    'SAOJOAO':    { cor: '#3A1267' },
+    'VENANCIO':   { cor: '#D8163C' },
+  };
+  const redeLogo = (rede) => (REDE_MARCA[rede] ? `/redes/${rede.toLowerCase()}.png` : null);
+
+  const ICONE_PDV = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M5 21V7l7-4 7 4v14M9 9h1M9 13h1M14 9h1M14 13h1M10 21v-4h4v4"/></svg>';
+
+  // Marca do PDV: logo da rede quando conhecida, senão o ícone genérico de prédio
+  const marcaPdv = (rede, classe) => {
+    const logo = redeLogo(rede);
+    return logo
+      ? `<div class="${classe} tem-logo"><img src="${logo}" alt="${esc(redeLabel(rede))}" loading="lazy"></div>`
+      : `<div class="${classe}">${ICONE_PDV}</div>`;
+  };
 
   const UFS = ['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'];
 
@@ -95,13 +136,13 @@
     'RECUSADA': 'Recusada',
   };
 
-  const toast = (msg, isError = false) => {
+  const toast = (msg, isError = false, duracao = 5200) => {
     document.querySelectorAll('.toast').forEach((t) => t.remove());
     const el = document.createElement('div');
     el.className = `toast${isError ? ' toast-error' : ''}`;
     el.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg><span>${esc(msg)}</span>`;
     document.body.appendChild(el);
-    setTimeout(() => el.remove(), 5200);
+    setTimeout(() => el.remove(), duracao);
   };
 
   const api = async (url, opts = {}) => {
@@ -119,6 +160,7 @@
     'admin': '/admin',
     'aprovacoes': '/admin/aprovacoes',
     'usuarios': '/admin/usuarios',
+    'sugestoes': '/minhas-sugestoes',
     'senha': '/senha',
     1: '/representante',
     2: '/sugerir',
@@ -130,6 +172,14 @@
   const goTo = (n, historico = 'push') => {
     document.querySelectorAll('.panel').forEach((p) => p.classList.remove('active'));
     $(`#panel-${n}`).classList.add('active');
+    state.painelAtual = n;
+    $('#page').classList.toggle('page-wide', ROTAS_LARGAS.includes(n));
+    $('#appFooter').style.display = n === 'login' ? 'none' : '';
+    document.title = `${TITULO_PAGINA[n] || 'Indicação de PDVs'} · Ease Labs`;
+    marcarNavAtivo();
+    fecharDropdowns();
+    if (n !== 'senha') ocultarSenhas();
+    if (n === 'admin') carregarDashboard();
 
     if (historico && ROTA[n] && location.pathname !== ROTA[n]) {
       history[historico === 'replace' ? 'replaceState' : 'pushState']({ panel: n }, '', ROTA[n]);
@@ -170,44 +220,145 @@
     if (!state.auth) alvo = 'login';
     else if (alvo === null || alvo === 'login') alvo = isAdmin ? 'admin' : 2;
     else if ((alvo === 'admin' || alvo === 'aprovacoes' || alvo === 'usuarios') && !isAdmin) alvo = 2;
+    else if (alvo === 'sugestoes' && isAdmin) alvo = 'aprovacoes'; // admin usa Aprovações
     else if (alvo === 1 && !isAdmin) alvo = 2; // rep já está no próprio território
     else if (typeof alvo === 'number' && alvo >= 3 && !state.pdv) alvo = temCtx ? 2 : (isAdmin ? 'admin' : 2);
     else if (alvo === 2 && !temCtx) alvo = isAdmin ? 'admin' : 2;
 
     if (alvo === 'aprovacoes') carregarAprovacoes();
     if (alvo === 'usuarios') carregarUsuarios();
+    if (alvo === 'sugestoes') carregarMinhasSugestoes();
+    // o painel precisa estar visível ANTES de montar o mapa (Leaflet mede o container)
+    goTo(alvo, ROTA[alvo] === path ? false : historico);
     if (alvo === 3 && state.pdv) renderValidacao();
     if (alvo === 4 && state.pdv) renderSkus();
-    goTo(alvo, ROTA[alvo] === path ? false : historico);
   };
 
   window.addEventListener('popstate', () => irParaRota(location.pathname, 'replace'));
 
+  // ---------------------------------------------------------- atalhos de fluxo
+  const irSugerirComoRep = () => {
+    state.bia = false;
+    $('#pdvSearch').value = '';
+    $('#pdvResults').innerHTML = '';
+    goTo(2);
+    setTimeout(() => $('#pdvSearch').focus(), 350);
+  };
+
+  const entrarModoBia = () => {
+    state.bia = true;
+    state.rep = null;
+    state.pdv = null;
+    atualizarHeader();
+    $('#pdvSearch').value = '';
+    $('#pdvResults').innerHTML = '';
+    goTo(2);
+    setTimeout(() => $('#pdvSearch').focus(), 350);
+  };
+
+  // ---------------------------------------------------------- app shell (topbar)
+  // Itens de navegação por papel. `match` diz quais painéis acendem o item.
+  const navItems = () => {
+    if (!state.auth) return [];
+    if (state.auth.role !== 'admin') {
+      return [
+        { id: 'nova', label: 'Nova sugestão', match: [2, 3, 4, 5], onClick: () => irSugerirComoRep() },
+        { id: 'minhas', label: 'Minhas sugestões', match: ['sugestoes'], onClick: () => { goTo('sugestoes'); carregarMinhasSugestoes(); } },
+      ];
+    }
+    return [
+      { id: 'painel', label: 'Painel', match: ['admin'], onClick: () => goTo('admin') },
+      {
+        id: 'sugerir', label: 'Sugerir VB', match: [1, 2, 3, 4, 5],
+        menu: [
+          { label: 'Como representante', sub: 'Percorre o fluxo de um território', onClick: () => { state.rep = null; state.bia = false; atualizarHeader(); goTo(1); } },
+          { label: 'Ajustar como BI&A', sub: 'Define o VB direto, já aprovado', onClick: () => entrarModoBia() },
+        ],
+      },
+      { id: 'aprovacoes', label: 'Aprovações', match: ['aprovacoes'], badge: () => state.pendentes, onClick: () => { goTo('aprovacoes'); carregarAprovacoes(); } },
+      { id: 'usuarios', label: 'Usuários', match: ['usuarios'], onClick: () => { goTo('usuarios'); carregarUsuarios(); } },
+    ];
+  };
+
+  const renderNav = () => {
+    const nav = $('#topnav');
+    const itens = navItems();
+    nav.innerHTML = itens.map((it) => {
+      const badge = it.badge && it.badge() ? `<span class="topnav-badge">${it.badge()}</span>` : '';
+      const chev = it.menu
+        ? '<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>'
+        : '';
+      const botao = `<button class="topnav-item" data-nav="${it.id}">${esc(it.label)}${badge}${chev}</button>`;
+      return it.menu
+        ? `<div class="topnav-group" data-group="${it.id}">${botao}
+             <div class="dropdown-menu">
+               ${it.menu.map((m, i) => `<button class="dropdown-item" data-menu="${it.id}" data-idx="${i}">
+                  <span><strong style="font-weight:600">${esc(m.label)}</strong><span class="di-sub">${esc(m.sub || '')}</span></span>
+                </button>`).join('')}
+             </div>
+           </div>`
+        : botao;
+    }).join('');
+
+    nav.querySelectorAll('.topnav-item').forEach((btn) => {
+      const it = itens.find((x) => x.id === btn.dataset.nav);
+      btn.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        if (it.menu) {
+          const grupo = btn.closest('.topnav-group');
+          const abrindo = !grupo.classList.contains('open');
+          fecharDropdowns();
+          grupo.classList.toggle('open', abrindo);
+        } else {
+          fecharDropdowns();
+          it.onClick();
+        }
+      });
+    });
+    nav.querySelectorAll('.dropdown-item[data-menu]').forEach((btn) => {
+      const it = itens.find((x) => x.id === btn.dataset.menu);
+      btn.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        fecharDropdowns();
+        it.menu[Number(btn.dataset.idx)].onClick();
+      });
+    });
+    marcarNavAtivo();
+  };
+
+  const marcarNavAtivo = () => {
+    const atual = state.painelAtual;
+    navItems().forEach((it) => {
+      const btn = $(`#topnav .topnav-item[data-nav="${it.id}"]`);
+      if (btn) btn.classList.toggle('active', it.match.includes(atual));
+    });
+  };
+
+  const fecharDropdowns = () => {
+    document.querySelectorAll('.topnav-group.open, .topbar-user.open')
+      .forEach((el) => el.classList.remove('open'));
+    $('#userTrigger').setAttribute('aria-expanded', 'false');
+  };
+  document.addEventListener('click', fecharDropdowns);
+
   // ---------------------------------------------------------- auth
   const atualizarHeader = () => {
     const logado = !!state.auth;
-    const wrap = $('#headerUser');
-    wrap.classList.toggle('visible', logado);
+    $('#topbar').style.display = logado ? '' : 'none';
     if (!logado) return;
 
     const isAdmin = state.auth.role === 'admin';
-    $('#headerRole').style.display = isAdmin ? '' : 'none';
-    $('#headerRole').textContent = 'Administrador';
-    const nomeExibir = isAdmin ? (state.rep ? titleCase(state.rep) : state.auth.nome) : state.auth.nome;
-    if (nomeExibir) {
-      $('#headerUserNameWrap').style.display = '';
-      $('#headerUserAvatar').style.display = '';
-      $('#headerUserName').textContent = nomeExibir;
-      $('#headerUserRole').textContent = isAdmin
-        ? (state.rep ? 'Representante (simulação)' : 'BI&A')
-        : 'Representante';
-      $('#headerUserAvatar').textContent = iniciais(nomeExibir);
-    } else {
-      $('#headerUserNameWrap').style.display = 'none';
-      $('#headerUserAvatar').style.display = 'none';
-    }
-    // "Trocar" só faz sentido para admin simulando representantes
+    const nomeExibir = isAdmin && state.rep ? titleCase(state.rep) : state.auth.nome;
+    const papel = isAdmin ? (state.rep ? 'Representante (simulação)' : 'BI&A') : 'Representante';
+
+    $('#headerUserName').textContent = nomeExibir;
+    $('#headerUserRole').textContent = papel;
+    $('#headerUserAvatar').textContent = iniciais(nomeExibir || '?');
+    $('#menuUserName').textContent = state.auth.nome;
+    $('#menuUserSub').textContent = `${state.auth.usuario} · ${isAdmin ? 'Administrador' : 'Representante'}`;
+    // "Trocar representante" só faz sentido para admin simulando
     $('#btnTrocarRep').style.display = isAdmin && state.rep ? '' : 'none';
+    renderNav();
   };
 
   const entrar = async () => {
@@ -225,7 +376,7 @@
       $('#loginPass').value = '';
       iniciarSessao();
       if (r.senha_padrao) {
-        toast('Você ainda usa a senha padrão inicial — recomendamos trocá-la em "Alterar senha".');
+        toast('Você ainda está usando a senha padrão. Para criar a sua, clique no seu nome no canto superior direito da tela e escolha "Alterar senha".', false, 11000);
       }
     } catch (e) {
       $('#loginErro').textContent = e.message;
@@ -327,9 +478,7 @@
       }
       box.innerHTML = rows.map((p, i) => `
         <button class="pdv-result" data-cnpj="${esc(p.cnpj)}" style="animation-delay:${Math.min(i * 40, 400)}ms">
-          <div class="pdv-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M5 21V7l7-4 7 4v14M9 9h1M9 13h1M14 9h1M14 13h1M10 21v-4h4v4"/></svg>
-          </div>
+          ${marcaPdv(p.rede, 'pdv-icon')}
           <div class="pdv-info">
             <div class="pdv-nome">${esc(redeLabel(p.rede))}</div>
             <div class="pdv-sub">${esc(titleCase(p.endereco || ''))} · ${esc(titleCase(p.cidade || ''))}/${esc(p.uf || '')}</div>
@@ -381,16 +530,41 @@
     if (!el || typeof L === 'undefined') return;
     const lat = Number(pdv.latitude), lng = Number(pdv.longitude);
     if (pdvMapInstance) { pdvMapInstance.remove(); pdvMapInstance = null; }
+
+    // No tablet o mapa ocupa a largura toda no meio de uma página que rola.
+    // Com arraste de 1 dedo ligado, o mapa "engole" o gesto e o representante
+    // fica preso nele. Então: 1 dedo rola a página, 2 dedos movem o mapa.
+    const toque = window.matchMedia('(pointer: coarse)').matches;
     pdvMapInstance = L.map(el, {
       center: [lat, lng], zoom: 17, zoomControl: false,
-      dragging: true, scrollWheelZoom: false,
+      dragging: !toque, scrollWheelZoom: false,
     });
+    if (toque) {
+      el.classList.add('mapa-toque');
+      el.addEventListener('touchstart', (ev) => {
+        if (ev.touches.length >= 2) pdvMapInstance.dragging.enable();
+      }, { passive: true });
+      el.addEventListener('touchend', () => {
+        if (pdvMapInstance) pdvMapInstance.dragging.disable();
+      }, { passive: true });
+    }
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '© OpenStreetMap',
       maxZoom: 19,
     }).addTo(pdvMapInstance);
     L.marker([lat, lng]).addTo(pdvMapInstance);
     L.control.zoom({ position: 'bottomright' }).addTo(pdvMapInstance);
+
+    // Se o painel ainda estava oculto (ou animando) quando o mapa nasceu, o Leaflet
+    // mediu 0x0 e os tiles não carregam — daí o quadrado cinza. Remedimos depois
+    // que o painel aparece e ao fim da animação de entrada.
+    const remedir = () => {
+      if (!pdvMapInstance) return;
+      pdvMapInstance.invalidateSize();
+      pdvMapInstance.setView([lat, lng], 17);
+    };
+    requestAnimationFrame(remedir);
+    setTimeout(remedir, 260);
   };
 
   const renderValidacao = () => {
@@ -402,9 +576,7 @@
 
     $('#pdvValidacaoCard').innerHTML = `
       <div class="pdv-hero">
-        <div class="pdv-hero-icon">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M5 21V7l7-4 7 4v14M9 9h1M9 13h1M14 9h1M14 13h1M10 21v-4h4v4"/></svg>
-        </div>
+        ${marcaPdv(rede, 'pdv-hero-icon')}
         <div>
           <h3>${esc(manual && !temAdequacao ? titleCase(pdv.nome) : (rede ? redeLabel(rede) : titleCase(pdv.nome)))}</h3>
           <div class="pdv-hero-cnpj">CNPJ ${fmtCNPJ(pdv.cnpj)}</div>
@@ -453,15 +625,19 @@
   const renderSkus = () => {
     const { pdv, adequacao } = state.pdv;
     const semDados = adequacao.length === 0;
-    state.skuSelecionado = null;
-    state.vb = 1;
+    state.selecionados = {};    // a seleção é por PDV
     $('#submitBar').style.display = 'none';
 
     const rede = adequacao[0]?.rede || state.pdv.manualRede;
+    // a barra assume a cor da marca da rede (fallback: navy do design system);
+    // em cores claras (ex.: amarelo da Drogal) o texto vira grafite
+    const marca = REDE_MARCA[rede];
+    const barra = $('#pdvContextBar');
+    barra.style.setProperty('--rede-cor', marca ? marca.cor : 'var(--bg-sidebar)');
+    barra.style.setProperty('--rede-texto', marca?.textoEscuro ? 'var(--gray-900)' : '#fff');
+    barra.classList.toggle('texto-escuro', !!marca?.textoEscuro);
     $('#pdvContextBar').innerHTML = `
-      <div class="ctx-icon">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M5 21V7l7-4 7 4v14"/></svg>
-      </div>
+      ${marcaPdv(rede, 'ctx-icon')}
       <div>
         <div class="ctx-nome">${esc(semDados ? titleCase(pdv.nome) : (rede ? redeLabel(rede) : titleCase(pdv.nome)))}${state.bia ? ' <span class="badge badge-accent">Ajuste BI&A</span>' : ''}</div>
         <div class="ctx-sub">${fmtCNPJ(pdv.cnpj)} · ${esc(titleCase(pdv.cidade || ''))}/${esc(pdv.uf || '')}${pdv.categoria != null ? ` · Categoria ${esc(pdv.categoria)}` : ''}</div>
@@ -475,7 +651,6 @@
 
     const labelVb = state.bia ? 'VB (BI&A):' : 'Meu VB sugerido:';
     $('#skuGrid').innerHTML = linhas.map((a, i) => {
-      const delta = a.delta == null ? null : Number(a.delta);
       return `
       <div class="sku-card" data-ean="${esc(a.ean)}" style="animation-delay:${i * 60}ms; --sku-color:${SKU_COLOR[a.sku] || 'var(--border-default)'}">
         <div class="sku-head">
@@ -488,7 +663,6 @@
         <div class="sku-stats">
           <div class="sku-stat"><div class="sku-stat-label">Estoque atual</div><div class="sku-stat-value">${semDados ? '—' : (a.estoque_atual ?? 0)}</div></div>
           <div class="sku-stat"><div class="sku-stat-label">VB Sugerido Atual</div><div class="sku-stat-value">${a.estoque_ideal ?? '—'}</div></div>
-          <div class="sku-stat"><div class="sku-stat-label">Delta</div><div class="sku-stat-value ${delta > 0 ? 'pos' : delta < 0 ? 'neg' : ''}">${delta == null ? '—' : (delta > 0 ? '+' : '') + delta}</div></div>
           <div class="sku-stat"><div class="sku-stat-label">Und / mês</div><div class="sku-stat-value metric">${fmtMedia(a.media_mensal)}</div></div>
         </div>
         <div class="sku-vb-area">
@@ -499,45 +673,88 @@
               <input type="number" class="vb-input" min="0" step="1" value="1">
               <button type="button" class="vb-plus" aria-label="Aumentar">+</button>
             </div>
+            <div class="vb-dica" aria-live="polite"></div>
           </div>
+          ${semDados ? '' : `<div class="ia-box" data-ia="${esc(a.ean)}"></div>`}
         </div>
       </div>`;
     }).join('');
 
     document.querySelectorAll('.sku-card').forEach((card) => {
+      const ean = card.dataset.ean;
       card.addEventListener('click', (ev) => {
-        if (ev.target.closest('.sku-vb-area')) return; // não desselecionar mexendo no VB
-        selecionarSku(card.dataset.ean);
+        if (ev.target.closest('.sku-vb-area')) return; // mexer no VB não desmarca
+        alternarSku(ean);
       });
       card.querySelector('.vb-minus').addEventListener('click', () => ajustarVb(card, -1));
       card.querySelector('.vb-plus').addEventListener('click', () => ajustarVb(card, +1));
       card.querySelector('.vb-input').addEventListener('input', () => {
         const v = Math.max(0, Math.floor(Number(card.querySelector('.vb-input').value) || 0));
-        state.vb = v;
+        state.selecionados[ean] = v;
+        atualizarDica(card);
         atualizarResumo();
       });
     });
+    atualizarResumo();
   };
 
-  const selecionarSku = (ean) => {
-    state.skuSelecionado = ean;
-    document.querySelectorAll('.sku-card').forEach((c) =>
-      c.classList.toggle('selected', c.dataset.ean === ean));
-    const card = document.querySelector(`.sku-card[data-ean="${ean}"]`);
+  // ── Dica condicional do VB ─────────────────────────────────────────────
+  // Aparece só quando a proposta destoa em 2+ unidades da média mensal.
+  const ICONE_DICA = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 22h4M12 2a7 7 0 00-4 12.7V17h8v-2.3A7 7 0 0012 2z"/></svg>';
+
+  const textoDica = (vb, media) => {
+    const m = Number(media);
+    if (!Number.isFinite(m)) return null;
+    if (vb - m >= 2) return 'uma sugestão muito maior que as unidades dispensadas por mês pode resultar em produto parado na prateleira.';
+    if (m - vb >= 2) return 'uma sugestão muito menor que as unidades dispensadas por mês pode resultar em falta de estoque no PDV.';
+    return null;
+  };
+
+  // VB idêntico ao que o BI já sugere não é uma sugestão — é bloqueado no envio
+  const vbIgualAoBi = (ean, vb) => {
     const a = linhaPorEan(ean);
-    const padrao = a.estoque_ideal != null && a.estoque_ideal > 0 ? a.estoque_ideal : 1;
-    card.querySelector('.vb-input').value = padrao;
-    state.vb = Number(padrao);
-    $('#btnEnviar').innerHTML = labelBotaoEnviar();
-    $('#submitBar').style.display = '';
+    const ideal = a?.estoque_ideal;
+    return ideal != null && Number(ideal) === Number(vb);
+  };
+
+  const atualizarDica = (card) => {
+    const alvo = card.querySelector('.vb-dica');
+    if (!alvo) return;
+    const ean = card.dataset.ean;
+    const a = linhaPorEan(ean);
+    const vb = Math.max(0, Math.floor(Number(card.querySelector('.vb-input').value)) || 0);
+
+    const texto = textoDica(vb, a?.media_mensal);
+    if (!texto) { alvo.classList.remove('visivel'); return; }
+    alvo.innerHTML = `${ICONE_DICA}<span><strong>Dica:</strong> ${esc(texto)}</span>`;
+    alvo.classList.add('visivel');
+  };
+
+  // ── Seleção múltipla de SKUs ───────────────────────────────────────────
+  const alternarSku = (ean) => {
+    const card = document.querySelector(`.sku-card[data-ean="${ean}"]`);
+    if (!card) return;
+    if (ean in state.selecionados) {
+      delete state.selecionados[ean];
+      card.classList.remove('selected');
+    } else {
+      const a = linhaPorEan(ean);
+      const padrao = a.estoque_ideal != null && a.estoque_ideal > 0 ? Number(a.estoque_ideal) : 1;
+      state.selecionados[ean] = padrao;
+      card.querySelector('.vb-input').value = padrao;
+      card.classList.add('selected');
+      atualizarDica(card);
+    }
     atualizarResumo();
   };
 
   const ajustarVb = (card, dir) => {
+    const ean = card.dataset.ean;
     const input = card.querySelector('.vb-input');
     const v = Math.max(0, (Math.floor(Number(input.value)) || 0) + dir);
     input.value = v;
-    state.vb = v;
+    state.selecionados[ean] = v;
+    atualizarDica(card);
     atualizarResumo();
   };
 
@@ -546,61 +763,239 @@
     return state.pdv.adequacao.length && rede ? redeLabel(rede) : titleCase(state.pdv.pdv.nome);
   };
 
-  const labelBotaoEnviar = () => state.bia
-    ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg> Salvar VB (BI&A)'
-    : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg> Enviar sugestão';
-
   const atualizarResumo = () => {
-    if (!state.skuSelecionado) return;
-    const a = linhaPorEan(state.skuSelecionado);
+    const eans = Object.keys(state.selecionados);
+    const bar = $('#submitBar');
+    if (!eans.length) { bar.style.display = 'none'; return; }
+    bar.style.display = '';
+    const nomes = eans.map((e) => linhaPorEan(e).sku);
     const verbo = state.bia ? 'Definindo' : 'Sugerindo';
-    $('#submitResumo').innerHTML =
-      `${verbo} <strong>VB ${state.vb}</strong> de <strong>${esc(a.sku)}</strong> para <strong>${esc(nomeExibicaoPdv())}</strong>`;
+    $('#submitResumo').innerHTML = eans.length === 1
+      ? `${verbo} <strong>VB ${state.selecionados[eans[0]]}</strong> de <strong>${esc(nomes[0])}</strong> para <strong>${esc(nomeExibicaoPdv())}</strong>`
+      : `${verbo} VB para <strong>${eans.length} SKUs</strong> em <strong>${esc(nomeExibicaoPdv())}</strong>: ${esc(nomes.join(', '))}`;
+    $('#btnEnviarTexto').textContent = state.bia
+      ? (eans.length === 1 ? 'Salvar VB (BI&A)' : `Salvar ${eans.length} VBs (BI&A)`)
+      : (eans.length === 1 ? 'Enviar sugestão' : `Enviar ${eans.length} sugestões`);
   };
 
-  const enviarSugestao = async () => {
-    const btn = $('#btnEnviar');
-    if (!state.skuSelecionado) return;
-    btn.disabled = true;
-    btn.textContent = state.bia ? 'Salvando...' : 'Enviando...';
+  // ── Revisão da IA (aparece ao clicar em Enviar) ────────────────────────
+  const ICONE_IA = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9L12 3z"/><path d="M19 15l.7 1.8L21.5 18l-1.8.7L19 20.5l-.7-1.8L16.5 18l1.8-.7L19 15z"/></svg>';
+
+  const ALERTA_BADGE = {
+    abaixo: { classe: 'badge-warning', texto: 'Risco de ruptura' },
+    acima:  { classe: 'badge-gray',    texto: 'Estoque sobrando' },
+  };
+
+  const abrirRevisao = async () => {
+    const eans = Object.keys(state.selecionados);
+    if (!eans.length) return;
+    const modal = $('#modalRevisao');
+    const alvo = $('#revisaoConteudo');
+    $('#revisaoModelo').textContent = '';
+    $('#btnConfirmarEnvio').disabled = true;
+    modal.style.display = '';
+    requestAnimationFrame(() => modal.classList.add('aberto'));
+
+    alvo.innerHTML = `<div class="ia-carregando">${ICONE_IA}<span>Analisando as suas sugestões…</span></div>`;
+
+    // PDVs fora da base de adequação não têm histórico para comparar
+    if (!state.pdv.adequacao.length) {
+      alvo.innerHTML = `
+        <p class="revisao-contexto">Este PDV ainda não está na base de adequação de estoque, então não há histórico para comparar. Sua sugestão será registrada assim mesmo.</p>
+        ${eans.map((e) => `<div class="revisao-item"><div class="revisao-sku"><span class="sku-dot" style="--sku-color:${SKU_COLOR[linhaPorEan(e).sku]}"></span>${esc(linhaPorEan(e).sku)}<span class="revisao-vb">VB ${state.selecionados[e]}</span></div></div>`).join('')}`;
+      $('#btnConfirmarEnvio').disabled = false;
+      return;
+    }
+
     try {
-      const a = linhaPorEan(state.skuSelecionado);
-      const r = await api('/api/sugestoes', {
+      const r = await api('/api/revisao', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           cnpj: state.pdv.pdv.cnpj,
-          ean: state.skuSelecionado,
-          sugestao_vb: state.vb,
-          representante: state.bia ? undefined : state.rep,
-          rede: state.pdv.manualRede || undefined,
-          modo: state.bia ? 'bia' : undefined,
+          itens: eans.map((ean) => ({ ean, vb: state.selecionados[ean] })),
         }),
       });
-      if (state.bia) {
-        $('#successTitle').textContent = 'VB atualizado!';
-        $('#successMsg').innerHTML = 'O VB foi definido pelo <strong>BI&A</strong> e já entrou na sugestão oficial.';
-        $('#successDetail').innerHTML = `
-          <span><strong>${esc(nomeExibicaoPdv())}</strong> · ${fmtCNPJ(r.cnpj)}</span>
-          <span>${esc(a.sku)} — Volume Base: <strong>${esc(r.sugestao_vb)}</strong></span>
-          <span>Origem: <strong>BI&A</strong> · Status: <span class="badge badge-green">Aprovada</span></span>
-        `;
-      } else {
-        $('#successTitle').textContent = 'Sugestão enviada!';
-        $('#successMsg').innerHTML = 'Sua indicação foi registrada e está <strong>aguardando análise do BI&A</strong>.';
-        $('#successDetail').innerHTML = `
-          <span><strong>${esc(nomeExibicaoPdv())}</strong> · ${fmtCNPJ(r.cnpj)}</span>
-          <span>${esc(a.sku)} — Volume Base sugerido: <strong>${esc(r.sugestao_vb)}</strong></span>
-          <span>Representante: <strong>${esc(titleCase(r.representante))}</strong></span>
-          <span>Status: <span class="badge badge-warning">Pendente BI&A</span></span>
-        `;
-      }
-      goTo(5);
+      $('#revisaoModelo').textContent = r.origem === 'ia' ? r.modelo : 'leitura automática';
+      alvo.innerHTML = `
+        ${r.aviso ? `<div class="alert alert-warning" style="margin-bottom:14px">${esc(r.aviso)}</div>` : ''}
+        <p class="revisao-contexto">${esc(r.contexto)}</p>
+        ${r.comentarios.map((c) => {
+          const al = ALERTA_BADGE[c.alerta];
+          return `
+          <div class="revisao-item${c.alerta ? ' com-alerta' : ''}">
+            <div class="revisao-sku">
+              <span class="sku-dot" style="--sku-color:${SKU_COLOR[c.sku] || 'var(--gray-300)'}"></span>
+              ${esc(c.sku)}
+              <span class="revisao-vb">VB ${c.vb}</span>
+              ${al ? `<span class="badge ${al.classe}">${al.texto}</span>` : ''}
+            </div>
+            <p class="revisao-texto">${esc(c.texto)}</p>
+          </div>`;
+        }).join('')}`;
     } catch (e) {
-      toast(e.message, true);
+      alvo.innerHTML = `<div class="alert alert-warning">${esc(e.message)} Você pode confirmar o envio mesmo assim.</div>`;
+    } finally {
+      $('#btnConfirmarEnvio').disabled = false;
+    }
+  };
+
+  const fecharRevisao = () => {
+    const modal = $('#modalRevisao');
+    modal.classList.remove('aberto');
+    setTimeout(() => { modal.style.display = 'none'; }, 200);
+  };
+
+  // "A, B e C" — usado nas mensagens de erro consolidadas
+  const listar = (itens) => itens.length <= 1 ? (itens[0] || '')
+    : `${itens.slice(0, -1).join(', ')} e ${itens[itens.length - 1]}`;
+
+  // Consolida as falhas num único aviso, em vez de mostrar só a primeira.
+  const resumirFalhas = (falhas) => {
+    if (falhas.length === 1) return falhas[0].msg;
+    const pendentes = falhas.filter((f) => /pendente/i.test(f.msg));
+    if (pendentes.length === falhas.length) {
+      return `${falhas.length} sugestões não foram enviadas: você já tem uma pendente para `
+        + `${listar(falhas.map((f) => f.sku))} neste PDV. Aguarde a decisão do BI&A.`;
+    }
+    return falhas.map((f) => `${f.sku}: ${f.msg}`).join(' · ');
+  };
+
+  // Envia as sugestões marcadas. `botao` é só quem mostra o estado de carregando.
+  const enviarSelecionados = async (botao, fecharModal = false) => {
+    const eans = Object.keys(state.selecionados);
+    if (!eans.length) return;
+
+    // Nada é enviado se algum SKU repetir o VB que o BI já sugere.
+    const iguais = eans.filter((ean) => vbIgualAoBi(ean, state.selecionados[ean]));
+    if (iguais.length) {
+      const nomes = listar(iguais.map((e) => linhaPorEan(e).sku));
+      toast(iguais.length === 1
+        ? `O VB ${state.selecionados[iguais[0]]} que você sugeriu para ${nomes} já é o VB sugerido atualmente neste PDV. Ajuste o valor e tente novamente.`
+        : `O VB que você sugeriu para ${nomes} já é o sugerido atualmente neste PDV. Ajuste os valores e tente novamente.`, true);
+      iguais.forEach((ean) => {
+        const c = document.querySelector(`.sku-card[data-ean="${ean}"]`);
+        if (c) atualizarDica(c);
+      });
+      return;
+    }
+    const btn = botao;
+    const rotuloOriginal = btn.innerHTML;
+    btn.disabled = true;
+    btn.textContent = 'Enviando…';
+    try {
+      const resultados = await Promise.allSettled(eans.map((ean) =>
+        api('/api/sugestoes', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            cnpj: state.pdv.pdv.cnpj,
+            ean,
+            sugestao_vb: state.selecionados[ean],
+            representante: state.bia ? undefined : state.rep,
+            rede: state.pdv.manualRede || undefined,
+            modo: state.bia ? 'bia' : undefined,
+          }),
+        })));
+
+      const ok = resultados.filter((r) => r.status === 'fulfilled').map((r) => r.value);
+      const falhas = resultados
+        .map((r, i) => (r.status === 'rejected' ? { sku: linhaPorEan(eans[i]).sku, msg: r.reason.message } : null))
+        .filter(Boolean);
+
+      if (!ok.length) {
+        if (fecharModal) fecharRevisao();
+        toast(falhas.length ? resumirFalhas(falhas) : 'Não foi possível enviar.', true);
+        return;
+      }
+
+      $('#successTitle').textContent = state.bia
+        ? (ok.length > 1 ? 'VBs atualizados!' : 'VB atualizado!')
+        : (ok.length > 1 ? 'Sugestões enviadas!' : 'Sugestão enviada!');
+      $('#successMsg').innerHTML = state.bia
+        ? 'Os VBs foram definidos pelo <strong>BI&A</strong> e já entraram na sugestão oficial.'
+        : 'Suas indicações foram registradas e estão <strong>aguardando análise do BI&A</strong>.';
+      $('#successDetail').innerHTML = `
+        <span><strong>${esc(nomeExibicaoPdv())}</strong> · ${fmtCNPJ(state.pdv.pdv.cnpj)}</span>
+        ${ok.map((r) => `<span>${esc(r.sku)} — Volume Base: <strong>${esc(r.sugestao_vb)}</strong></span>`).join('')}
+        <span>Status: ${state.bia
+          ? '<span class="badge badge-green">Aprovada</span>'
+          : '<span class="badge badge-warning">Pendente BI&A</span>'}</span>
+        ${falhas.length ? `<span class="revisao-falha">${falhas.length} não enviada(s): ${esc(listar(falhas.map((f) => f.sku)))} — já em análise pelo BI&A</span>` : ''}
+      `;
+      if (falhas.length) toast(resumirFalhas(falhas), true);
+      state.selecionados = {};
+      if (fecharModal) fecharRevisao();
+      goTo(5);
     } finally {
       btn.disabled = false;
-      btn.innerHTML = labelBotaoEnviar();
+      btn.innerHTML = rotuloOriginal;
+    }
+  };
+
+  // ---------------------------------------------------------- rep: minhas sugestões
+  const carregarMinhasSugestoes = async () => {
+    const body = $('#minhasSugestoesBody');
+    body.innerHTML = '<tr><td colspan="11"><div class="skeleton" style="height:44px"></div></td></tr>';
+    try {
+      const rows = await api('/api/sugestoes');
+      const pend = rows.filter((r) => r.status_aprovacao === 'PENDENTE').length;
+      const apr = rows.filter((r) => r.status_aprovacao === 'APROVADA').length;
+      $('#minhasStats').innerHTML = rows.length
+        ? `<span class="badge badge-gray">${rows.length} ${rows.length === 1 ? 'sugestão' : 'sugestões'}</span>` +
+          (pend ? ` <span class="badge badge-warning">${pend} em análise</span>` : '') +
+          (apr ? ` <span class="badge badge-green">${apr} aprovada${apr === 1 ? '' : 's'}</span>` : '')
+        : '';
+      $('#minhasVazio').style.display = rows.length ? 'none' : '';
+      $('#panel-sugestoes').querySelector('.table-wrapper').style.display = rows.length ? '' : 'none';
+      body.innerHTML = rows.map((r) => `
+        <tr>
+          <td class="td-num" data-label="Enviada">${fmtData(r.created_at)}</td>
+          <td data-label="PDV">${esc(r.rede ? redeLabel(r.rede) : titleCase(r.nome_pdv || ''))}<div class="decidido">${fmtCNPJ(r.cnpj)}</div></td>
+          <td data-label="Cidade">${esc(titleCase(r.cidade || '—'))}${r.uf ? '/' + esc(r.uf) : ''}</td>
+          <td data-label="Rede">${esc(r.rede ? redeLabel(r.rede) : '—')}</td>
+          <td data-label="SKU">${esc(r.sku)}</td>
+          <td class="td-num" data-label="Estq. atual">${r.estoque_atual ?? '—'}</td>
+          <td class="td-num" data-label="VB sugerido BI">${r.estoque_ideal ?? '—'}</td>
+          <td class="td-num" data-label="Meu VB"><strong>${esc(r.sugestao_vb)}</strong></td>
+          <td class="td-num" data-label="Und / mês">${fmtMedia(r.media_mensal)}</td>
+          <td data-label="Status"><span class="badge ${STATUS_SUG_BADGE[r.status_aprovacao] || 'badge-gray'}">${esc(STATUS_SUG_LABEL[r.status_aprovacao] || r.status_aprovacao)}</span></td>
+          <td class="td-num" data-label="Decidida">${r.decidido_em ? fmtData(r.decidido_em) : '—'}</td>
+        </tr>
+      `).join('');
+    } catch (e) {
+      body.innerHTML = `<tr><td colspan="11" style="text-align:center;color:var(--error);padding:28px">${esc(e.message)}</td></tr>`;
+    }
+  };
+
+  // ---------------------------------------------------------- admin: painel (KPIs)
+  const carregarDashboard = async () => {
+    try {
+      const d = await api('/api/dashboard');
+      state.pendentes = Number(d.pendentes) || 0;
+      const num = (v) => Number(v || 0).toLocaleString('pt-BR');
+      const kpis = [
+        { label: 'Aguardando análise', valor: num(d.pendentes), cor: 'var(--warning)',
+          hint: state.pendentes ? 'Clique para revisar' : 'Nada na fila', click: true },
+        { label: 'Aprovadas no mês', valor: num(d.aprovadas_mes), cor: 'var(--green-600)',
+          hint: 'Já valendo na sugestão oficial' },
+        { label: 'Representantes ativos', valor: num(d.reps_ativos), cor: 'var(--primary-600)',
+          hint: 'Com CT ativo em território' },
+        { label: 'PDVs na base', valor: num(d.pdvs_mapeados), cor: 'var(--accent-600)',
+          hint: 'Redes monitoradas' },
+      ];
+      $('#kpiGrid').innerHTML = kpis.map((k, i) => `
+        <div class="kpi-card${k.click ? ' clickable' : ''}" style="--kpi-color:${k.cor}; animation-delay:${i * 60}ms"${k.click ? ' data-goto="aprovacoes"' : ''}>
+          <div class="kpi-label">${esc(k.label)}</div>
+          <div class="kpi-value">${k.valor}</div>
+          <div class="kpi-hint">${esc(k.hint)}</div>
+        </div>
+      `).join('');
+      $('#kpiGrid').querySelectorAll('[data-goto]').forEach((el) =>
+        el.addEventListener('click', () => { goTo('aprovacoes'); carregarAprovacoes(); }));
+      renderNav(); // atualiza o badge de pendentes
+    } catch (e) {
+      $('#kpiGrid').innerHTML = `<div class="search-empty">${esc(e.message)}</div>`;
     }
   };
 
@@ -627,20 +1022,20 @@
       }
       body.innerHTML = rows.map((r) => `
         <tr data-id="${r.id}">
-          <td class="td-num">${fmtData(r.created_at)}</td>
-          <td>${esc(repDisplay(r.representante))}</td>
-          <td>${esc(r.rede ? redeLabel(r.rede) : titleCase(r.nome_pdv || ''))}<div class="decidido">${fmtCNPJ(r.cnpj)}</div></td>
-          <td>${esc(r.rede ? redeLabel(r.rede) : '—')}</td>
-          <td>${esc(r.sku)}</td>
-          <td class="td-num">${r.estoque_atual ?? '—'}</td>
-          <td class="td-num">${r.estoque_ideal ?? '—'}</td>
-          <td class="td-num"><strong>${esc(r.sugestao_vb)}</strong></td>
-          <td class="td-num">${fmtMedia(r.media_mensal)}</td>
-          <td>
+          <td class="td-num" data-label="Enviada">${fmtData(r.created_at)}</td>
+          <td data-label="Representante">${esc(repDisplay(r.representante))}</td>
+          <td data-label="PDV">${esc(r.rede ? redeLabel(r.rede) : titleCase(r.nome_pdv || ''))}<div class="decidido">${fmtCNPJ(r.cnpj)}</div></td>
+          <td data-label="Rede">${esc(r.rede ? redeLabel(r.rede) : '—')}</td>
+          <td data-label="SKU">${esc(r.sku)}</td>
+          <td class="td-num" data-label="Estq. atual">${r.estoque_atual ?? '—'}</td>
+          <td class="td-num" data-label="VB sugerido BI">${r.estoque_ideal ?? '—'}</td>
+          <td class="td-num" data-label="VB do rep"><strong>${esc(r.sugestao_vb)}</strong></td>
+          <td class="td-num" data-label="Und / mês">${fmtMedia(r.media_mensal)}</td>
+          <td data-label="Status">
             <span class="badge ${STATUS_SUG_BADGE[r.status_aprovacao] || 'badge-gray'}">${esc(STATUS_SUG_LABEL[r.status_aprovacao] || r.status_aprovacao)}</span>
             ${r.decidido_em ? `<div class="decidido">${fmtData(r.decidido_em)}</div>` : ''}
           </td>
-          <td>
+          <td class="td-acoes">
             ${r.status_aprovacao === 'PENDENTE' ? `
               <div class="acao-wrap">
                 <button class="btn-aprovar" title="Aprovar" data-acao="APROVADA">
@@ -689,14 +1084,14 @@
         `<span class="badge badge-gray">${rows.length} usuários</span> <span class="badge badge-green">${ativos} ativos</span>`;
       body.innerHTML = rows.map((u) => `
         <tr data-id="${u.id}">
-          <td><strong>${esc(u.usuario)}</strong></td>
-          <td>${esc(u.nome)}</td>
-          <td><span class="badge ${u.role === 'admin' ? 'badge-accent' : 'badge-primary'}">${u.role === 'admin' ? 'Admin' : 'Representante'}</span></td>
-          <td>${esc(titleCase(u.desc_territorio || '—'))}</td>
-          <td><span class="badge ${u.ativo ? 'badge-green' : 'badge-error'}">${u.ativo ? 'Ativo' : 'Desativado'}</span></td>
-          <td>${u.senha_padrao ? '<span class="badge badge-warning">Padrão</span>' : '<span class="badge badge-gray">Própria</span>'}</td>
-          <td class="td-num">${u.ultimo_login ? fmtData(u.ultimo_login) : '—'}</td>
-          <td><button class="btn btn-sm btn-secondary btn-reset-senha">Redefinir senha</button></td>
+          <td data-label="Usuário"><strong>${esc(u.usuario)}</strong></td>
+          <td data-label="Nome">${esc(u.nome)}</td>
+          <td data-label="Papel"><span class="badge ${u.role === 'admin' ? 'badge-accent' : 'badge-primary'}">${u.role === 'admin' ? 'Admin' : 'Representante'}</span></td>
+          <td data-label="Território">${esc(titleCase(u.desc_territorio || '—'))}</td>
+          <td data-label="Situação"><span class="badge ${u.ativo ? 'badge-green' : 'badge-error'}">${u.ativo ? 'Ativo' : 'Desativado'}</span></td>
+          <td data-label="Senha">${u.senha_padrao ? '<span class="badge badge-warning">Padrão</span>' : '<span class="badge badge-gray">Própria</span>'}</td>
+          <td class="td-num" data-label="Último login">${u.ultimo_login ? fmtData(u.ultimo_login) : '—'}</td>
+          <td class="td-acoes"><button class="btn btn-sm btn-secondary btn-reset-senha">Redefinir senha</button></td>
         </tr>
       `).join('');
       body.querySelectorAll('.btn-reset-senha').forEach((btn) =>
@@ -718,6 +1113,27 @@
   };
 
   // ---------------------------------------------------------- alterar senha
+  // Exibir/ocultar os caracteres. Volta a ocultar sozinho ao sair da tela,
+  // para a senha não ficar exposta se o rep deixar o celular na mesa.
+  const ocultarSenhas = () => {
+    document.querySelectorAll('.btn-olho').forEach((b) => {
+      b.setAttribute('aria-pressed', 'false');
+      b.setAttribute('aria-label', 'Exibir senha');
+      $(`#${b.dataset.alvo}`).type = 'password';
+    });
+  };
+
+  document.querySelectorAll('.btn-olho').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const campo = $(`#${btn.dataset.alvo}`);
+      const exibir = campo.type === 'password';
+      campo.type = exibir ? 'text' : 'password';
+      btn.setAttribute('aria-pressed', String(exibir));
+      btn.setAttribute('aria-label', exibir ? 'Ocultar senha' : 'Exibir senha');
+      campo.focus();
+    });
+  });
+
   const salvarSenha = async () => {
     const atual = $('#senhaAtual').value;
     const nova = $('#senhaNova').value;
@@ -759,25 +1175,29 @@
   $('#loginUser').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#loginPass').focus(); });
   $('#btnSair').addEventListener('click', logout);
 
-  $('#btnAdminComoRep').addEventListener('click', () => { state.rep = null; state.bia = false; goTo(1); });
-  $('#btnAdminBia').addEventListener('click', () => {
-    state.bia = true;
-    state.rep = null;
-    state.pdv = null;
-    atualizarHeader();
-    $('#pdvSearch').value = '';
-    $('#pdvResults').innerHTML = '';
-    goTo(2);
-    setTimeout(() => $('#pdvSearch').focus(), 350);
-  });
-  $('#btnAdminAprovacoes').addEventListener('click', () => { goTo('aprovacoes'); carregarAprovacoes(); });
-  $('#btnAdminUsuarios').addEventListener('click', () => { goTo('usuarios'); carregarUsuarios(); });
-  $('#btnVoltarAdmin').addEventListener('click', () => goTo('admin'));
-  $('#btnUsuariosVoltar').addEventListener('click', () => goTo('admin'));
+  $('#btnAdminComoRep').addEventListener('click', () => { state.rep = null; state.bia = false; atualizarHeader(); goTo(1); });
+  $('#btnAdminBia').addEventListener('click', entrarModoBia);
   $('#btnEtapa1VoltarAdmin').addEventListener('click', () => goTo('admin'));
+
+  // menu do usuário (dropdown no avatar)
+  $('#userTrigger').addEventListener('click', (ev) => {
+    ev.stopPropagation();
+    const wrap = $('#topbarUser');
+    const abrindo = !wrap.classList.contains('open');
+    fecharDropdowns();
+    wrap.classList.toggle('open', abrindo);
+    $('#userTrigger').setAttribute('aria-expanded', String(abrindo));
+  });
+  $('#userMenu').addEventListener('click', (ev) => ev.stopPropagation());
   $('#btnEtapa2Voltar').addEventListener('click', () => {
     if (state.bia) { state.bia = false; atualizarHeader(); goTo('admin'); }
     else { state.rep = null; atualizarHeader(); goTo(1); }
+  });
+  $('#btnVaziaNova').addEventListener('click', irSugerirComoRep);
+  // logo = atalho para o início: "Nova sugestão" (rep) ou "Painel" (admin)
+  $('#btnLogoHome').addEventListener('click', () => {
+    if (state.auth?.role === 'admin') goTo('admin');
+    else irSugerirComoRep();
   });
   $('#btnAlterarSenha').addEventListener('click', () => goTo('senha'));
   $('#btnSenhaVoltar').addEventListener('click', () => goTo(state.auth?.role === 'admin' ? 'admin' : 2));
@@ -811,8 +1231,25 @@
   });
 
   $('#btnVoltarBusca').addEventListener('click', () => goTo(2));
-  $('#btnVoltarValidacao').addEventListener('click', () => { renderValidacao(); goTo(3); });
-  $('#btnEnviar').addEventListener('click', enviarSugestao);
+  // goTo primeiro: o painel precisa estar visível antes do mapa ser montado
+  $('#btnVoltarValidacao').addEventListener('click', () => { goTo(3); renderValidacao(); });
+  // ── REVISÃO POR IA: DESATIVADA ──────────────────────────────────────────
+  // O envio vai direto para o banco, sem passar pelo modal de revisão.
+  // Para REATIVAR, basta trocar a linha abaixo por:
+  //     $('#btnEnviar').addEventListener('click', abrirRevisao);
+  // O restante (endpoint /api/revisao, abrirRevisao, o modal e o fallback
+  // determinístico) continua pronto e testado — nada foi removido.
+  $('#btnEnviar').addEventListener('click', () => enviarSelecionados($('#btnEnviar')));
+
+  $('#btnVoltarAjustar').addEventListener('click', fecharRevisao);
+  $('#btnConfirmarEnvio').addEventListener('click',
+    () => enviarSelecionados($('#btnConfirmarEnvio'), true));
+  $('#modalRevisao').addEventListener('click', (ev) => {
+    if (ev.target.id === 'modalRevisao') fecharRevisao();   // clique fora fecha
+  });
+  document.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Escape' && $('#modalRevisao').classList.contains('aberto')) fecharRevisao();
+  });
 
   $('#btnOutroSku').addEventListener('click', async () => {
     // recarrega as sugestões para refletir a que acabou de ser enviada
@@ -896,8 +1333,8 @@
       };
     }
     btn.disabled = false;
-    renderValidacao();
     goTo(3);
+    renderValidacao();
   };
   $('#btnManualContinuar').addEventListener('click', continuarManual);
 

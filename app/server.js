@@ -257,6 +257,24 @@ app.get('/api/representantes', auth(['admin']), asyncRoute(async (_req, res) => 
 }));
 
 // ----------------------------------------------------------------------------
+// GET /api/dashboard — indicadores da home do administrador
+// ----------------------------------------------------------------------------
+app.get('/api/dashboard', auth(['admin']), asyncRoute(async (_req, res) => {
+  const { rows } = await pool.query(`
+    SELECT
+      (SELECT COUNT(*) FROM trade_fv.sugestao_fv
+        WHERE status_aprovacao = 'PENDENTE')                       AS pendentes,
+      (SELECT COUNT(*) FROM trade_fv.sugestao_fv
+        WHERE status_aprovacao = 'APROVADA'
+          AND decidido_em >= date_trunc('month', now()))           AS aprovadas_mes,
+      (SELECT COUNT(*) FROM trade_fv.usuario
+        WHERE role = 'rep' AND ativo)                              AS reps_ativos,
+      (SELECT COUNT(*) FROM trade_fv.fato_adequacao_estoque)       AS pdvs_mapeados
+  `);
+  res.json(rows[0]);
+}));
+
+// ----------------------------------------------------------------------------
 // GET /api/redes — redes presentes na base de adequação (p/ cadastro manual)
 // ----------------------------------------------------------------------------
 app.get('/api/redes', auth(), asyncRoute(async (_req, res) => {
@@ -275,6 +293,9 @@ app.get('/api/redes', auth(), asyncRoute(async (_req, res) => {
 // Apenas PDVs presentes na base de adequação (só esses têm sugestão de VB).
 // Traz a rede oficial (ex.: Drogaria Catarinense → CLAMED) e a categoria.
 // ----------------------------------------------------------------------------
+// remove acentos do termo digitado (a base está sem acentos)
+const semAcento = (t) => t.normalize('NFD').replace(/[̀-ͯ]/g, '');
+
 // apelidos de rede digitáveis → nome canônico na base
 const normalizarRedesNaBusca = (q) => q
   .replace(/pague\s*menos/gi, 'PAGUEMENOS')
@@ -289,25 +310,38 @@ app.get('/api/pdvs', auth(), asyncRoute(async (req, res) => {
   const digits = q.replace(/\D/g, '');
   const params = [];
   const where = [];
-  let ordemRede = '';
+  let ordemRelevancia = '';
 
   if (digits.length >= 4 && digits.length === q.replace(/[.\-\/\s]/g, '').length) {
     // busca por CNPJ: compara os dígitos (bigint perde zeros à esquerda)
     params.push(`%${digits}%`);
     where.push(`p."CNPJ_PDV"::text LIKE $${params.length}`);
   } else {
-    // busca textual: cada palavra deve casar com nome, cidade, bairro, endereço ou REDE
-    const qNorm = normalizarRedesNaBusca(q);
+    // A base está sem acentos (só ~2 linhas em 28 mil têm), então normalizar o
+    // termo digitado resolve: "Goiânia" casa com "GOIANIA", "São Paulo" com "SAO PAULO".
+    const qNorm = semAcento(normalizarRedesNaBusca(q)).trim();
     const tokens = qNorm.split(/\s+/).filter(Boolean).slice(0, 6);
+
     for (const token of tokens) {
       params.push(`%${token}%`);
       where.push(`(p."DESC_PDV" ILIKE $${params.length} OR p."CIDADE_PDV" ILIKE $${params.length}
                    OR p."BAIRRO_PDV" ILIKE $${params.length} OR p."ENDERECO_PDV" ILIKE $${params.length}
                    OR f.provedor_pdv ILIKE $${params.length})`);
     }
-    // quem digitou o nome de uma rede vê os PDVs dessa rede primeiro
+
+    params.push(qNorm);
+    const iFrase = params.length;          // termo inteiro, p/ casar cidade/bairro exatos
     params.push(tokens);
-    ordemRede = `(f.provedor_pdv ILIKE ANY($${params.length}::text[])) DESC,`;
+    const iTokens = params.length;         // palavras soltas, p/ casar a rede
+
+    // Relevância: cidade exata primeiro (é como o rep pensa: "quero em Goiânia"),
+    // depois bairro, depois a rede digitada. Sem isso, buscar uma cidade grande
+    // devolvia 15 PDVs quaisquer entre centenas.
+    ordemRelevancia = `
+      (p."CIDADE_PDV" ILIKE $${iFrase}) DESC,
+      (p."CIDADE_PDV" ILIKE ANY($${iTokens}::text[])) DESC,
+      (p."BAIRRO_PDV" ILIKE $${iFrase}) DESC,
+      (f.provedor_pdv ILIKE ANY($${iTokens}::text[])) DESC,`;
   }
 
   const { rows } = await pool.query(`
@@ -327,9 +361,11 @@ app.get('/api/pdvs', auth(), asyncRoute(async (req, res) => {
     ) f ON TRUE
     ${SQL_CATEGORIA_LATERAL}
     WHERE ${where.join(' AND ')}
-    ORDER BY ${ordemRede} (p."DESC_SITUACAO" = 'ATIVA') DESC, p."DESC_PDV"
-    LIMIT 15
+    ORDER BY ${ordemRelevancia} (p."DESC_SITUACAO" = 'ATIVA') DESC,
+             p."CIDADE_PDV", p."BAIRRO_PDV", p."ENDERECO_PDV"
+    LIMIT 25
   `, params);
+
   res.json(rows);
 }));
 
@@ -392,6 +428,245 @@ app.get('/api/pdv/:cnpj', auth(), asyncRoute(async (req, res) => {
   });
 }));
 
+// ============================================================================
+//  RECOMENDAÇÃO DE VB POR IA
+//
+//  Desenho: o modelo NÃO faz aritmética de regra. O código calcula a faixa
+//  tecnicamente coerente (a partir do "Estoque Ideal" do BI, que já aplica a
+//  regra oficial) e a situação do estoque já comparada; o modelo escolhe dentro
+//  da faixa e escreve a justificativa. O número volta "clampado" na faixa.
+//  Motivo: modelos pequenos erram a aplicação da regra (testado: qwen2.5:3b
+//  sugeria VB 1 para um PDV com média de 12,7 un/mês). Assim o pior caso da IA
+//  é uma justificativa fraca, nunca um número perigoso.
+//
+//  Provedor: fala o dialeto OpenAI (/v1/chat/completions), que o Ollama expõe.
+//  Para trocar por uma API paga, basta apontar IA_URL/IA_MODELO/IA_API_KEY.
+// ============================================================================
+const IA_URL = process.env.IA_URL || 'http://localhost:11434/v1/chat/completions';
+const IA_MODELO = process.env.IA_MODELO || 'qwen2.5:3b';
+const IA_API_KEY = process.env.IA_API_KEY || '';
+const IA_TIMEOUT_MS = Number(process.env.IA_TIMEOUT_MS || 90000);
+
+const IA_SISTEMA = `Você é um analista de trade marketing que revisa as sugestões de Volume Base (VB) feitas por um representante de vendas para um ponto de venda (PDV).
+
+IDIOMA: escreva em português do Brasil correto e acentuado. Nunca use palavras em espanhol
+(é "média mensal", nunca "media mensual"). Nunca escreva palavras em CAIXA ALTA.
+
+TOM: objetivo, diplomático e profissional. Fale como um colega experiente comentando o
+trabalho do outro. Trate o representante por "você".
+
+REGRA ABSOLUTA SOBRE OS DADOS: todas as comparações já vêm prontas no campo "Leitura".
+Apenas transcreva-as em linguagem natural. Nunca recalcule, nunca invente números, nunca
+cite um número que não esteja nos dados fornecidos.
+
+VOCABULÁRIO PERMITIDO (não use nenhum outro termo técnico):
+VB, Categoria, média mensal, unidades por mês, estoque atual, PDV, rede, ruptura,
+alto potencial, baixo potencial, positivar, sugestão do BI.
+Não fale de margem, giro, markup, ROI, curva ABC, supply chain, lead time ou afins.
+
+ESTILO: prosa natural e corrida. Não copie a Leitura com parênteses, ponto-e-vírgula ou
+caixa alta — traduza para frases normais.
+
+FORMATO DA RESPOSTA — JSON válido, sem texto em volta:
+{
+  "contexto": "<1 ou 2 frases: comece por 'Este PDV da rede <REDE>' e diga se é de Categoria Alta ou Categoria Baixa>",
+  "comentarios": [
+    {"sku": "<nome exato do SKU>", "texto": "<1 ou 2 frases sobre o VB que você, representante, propôs para este SKU>"}
+  ]
+}
+
+EXEMPLO do estilo esperado (não copie os números, são de outro PDV):
+{
+  "contexto": "Este PDV da rede Pague Menos é de Categoria Alta, com cobertura de força de vendas e vendas recentes.",
+  "comentarios": [
+    {"sku": "Isolado 30 mL", "texto": "O VB 6 que você sugeriu está em linha com a média de 5,3 unidades por mês e coincide com a sugestão do BI. Proposta coerente."},
+    {"sku": "Extrato", "texto": "O VB 2 que você sugeriu é menor que a média de 8,0 unidades dispensadas por mês neste PDV, o que traz risco de ruptura antes da próxima visita."}
+  ]
+}
+
+Faça um comentário para CADA SKU listado, na mesma ordem, usando o nome exato do SKU.
+Comece cada comentário com "O VB <número> que você sugeriu".
+Cada comentário deve ter no máximo 220 caracteres.
+Quando a Leitura apontar que o VB proposto é menor que a média mensal, diga com clareza que
+há risco de ruptura antes da próxima visita. Quando for maior, diga que sobra estoque parado
+no PDV. Quando estiver em linha, confirme que a proposta está coerente.`;
+
+// nome de exibição das redes (espelha o REDE_LABEL do front)
+const REDE_LABEL_SRV = {
+  ARAUJO: 'Araujo', CLAMED: 'Clamed', DPSP: 'DPSP', DROGAL: 'Drogal',
+  INDIANA: 'Indiana', PAGUEMENOS: 'Pague Menos', PANVEL: 'Panvel',
+  RAIA: 'Raia Drogasil', SAOJOAO: 'São João', VENANCIO: 'Venâncio',
+};
+
+// Todas as comparações são feitas aqui, em código — o modelo só transcreve.
+const lerProposta = (vb, media, ideal) => {
+  const m = Number(media) || 0;
+  const i = Number(ideal) || 0;
+  const partes = [];
+  let alerta = null;
+
+  if (m === 0) {
+    partes.push('nao ha dispensacao registrada deste produto no periodo');
+  } else if (vb < Math.floor(m)) {
+    partes.push(`o VB proposto (${vb}) e MENOR que a media mensal (${m.toFixed(1)} un/mes)`);
+    alerta = 'abaixo';
+  } else if (vb > Math.ceil(m) + 1) {
+    partes.push(`o VB proposto (${vb}) e MAIOR que a media mensal (${m.toFixed(1)} un/mes)`);
+    alerta = 'acima';
+  } else {
+    partes.push(`o VB proposto (${vb}) esta EM LINHA com a media mensal (${m.toFixed(1)} un/mes)`);
+  }
+
+  if (vb === i) partes.push(`e IGUAL a sugestao do BI (${i})`);
+  else if (vb < i) partes.push(`e ABAIXO da sugestao do BI (${i})`);
+  else partes.push(`e ACIMA da sugestao do BI (${i})`);
+
+  return { leitura: partes.join('; ') + '.', alerta };
+};
+
+// Texto determinístico usado quando a IA não está disponível ou responde fora do
+// formato — o representante nunca fica sem a leitura, só sem a redação da IA.
+const revisaoFallback = (pdv, itens) => ({
+  contexto: `Este PDV da rede ${pdv.rede} é de Categoria ${pdv.categoria ?? '—'}`
+    + `${pdv.altoPotencial ? ' (alto potencial)' : ' (baixo potencial)'}`
+    + `${pdv.cobertura === 'Sim' ? ', com cobertura de força de vendas' : ', sem cobertura de força de vendas'}.`,
+  comentarios: itens.map((it) => ({
+    sku: it.sku,
+    texto: it.leitura.charAt(0).toUpperCase() + it.leitura.slice(1),
+  })),
+});
+
+app.post('/api/revisao', auth(), asyncRoute(async (req, res) => {
+  const cnpj = String(req.body?.cnpj || '').replace(/\D/g, '');
+  const propostas = Array.isArray(req.body?.itens) ? req.body.itens : [];
+  if (!cnpj || !propostas.length) {
+    return res.status(400).json({ error: 'Informe o CNPJ e ao menos um SKU.' });
+  }
+
+  const eans = propostas.map((i) => String(i.ean));
+  const { rows } = await pool.query(`
+    SELECT u."EAN" AS ean, u."SKU" AS sku, u."Rede" AS rede, u."CAT" AS categoria,
+           u."Cobertura FV" AS cobertura, u."Ultima Venda (dias)" AS ultima_venda,
+           u."Estoque Atual" AS estoque_atual, u."Estoque Ideal" AS estoque_ideal,
+           u."Média Mensal" AS media_mensal, u."Ajuste" AS ajuste,
+           p."CIDADE_PDV" AS cidade, p."UF_PDV" AS uf
+    FROM trade_fv.fato_adequacao_estoque_unpivot u
+    LEFT JOIN tdd.dim_pdv p ON p."CNPJ_PDV" = u."CNPJ"
+    WHERE u."CNPJ" = $1 AND u."EAN" = ANY($2::text[])
+  `, [cnpj, eans]);
+
+  if (!rows.length) {
+    return res.status(404).json({ error: 'Sem dados de adequação para este PDV.' });
+  }
+
+  const base = rows[0];
+  // POTENCIAL conforme a regra 4.2: INDIANA -> CAT <= 7; demais -> CAT <= 4
+  const cat = Number(base.categoria);
+  const altoPotencial = Number.isFinite(cat) &&
+    (base.rede === 'INDIANA' ? cat <= 7 : cat <= 4);
+  const redeNome = REDE_LABEL_SRV[base.rede] || base.rede;
+  const pdv = {
+    rede: redeNome, categoria: base.categoria, cobertura: base.cobertura,
+    cidade: base.cidade, uf: base.uf, altoPotencial,
+  };
+
+  // monta os itens na ordem em que o representante propôs
+  const itens = propostas.map((p) => {
+    const d = rows.find((r) => r.ean === String(p.ean));
+    if (!d) return null;
+    const vb = Math.max(0, Math.round(Number(p.vb)) || 0);
+    const { leitura, alerta } = lerProposta(vb, d.media_mensal, d.estoque_ideal);
+    return {
+      ean: d.ean, sku: d.sku, vb, alerta, leitura,
+      estoque_atual: Number(d.estoque_atual) || 0,
+      media_mensal: Number(d.media_mensal) || 0,
+      vb_bi: Number(d.estoque_ideal) || 0,
+    };
+  }).filter(Boolean);
+
+  if (!itens.length) return res.status(404).json({ error: 'SKUs não encontrados na base.' });
+
+  const ultima = Number(base.ultima_venda) >= 2000
+    ? 'o PDV nunca registrou venda'
+    : `${base.ultima_venda} dias desde a ultima venda`;
+
+  const contextoUsuario = [
+    `REDE (use exatamente este nome no contexto): ${redeNome}`,
+    `Cidade: ${base.cidade || '-'}/${base.uf || '-'}`,
+    `Categoria do PDV: ${base.categoria ?? 'nao informada'} — trate como ${altoPotencial ? 'Categoria ALTA (alto potencial)' : 'Categoria BAIXA (baixo potencial)'}`,
+    `Cobertura de forca de vendas: ${base.cobertura || '-'} | ${ultima}`,
+    '',
+    'SKUs propostos pelo representante:',
+    ...itens.map((it, n) => [
+      `${n + 1}) ${it.sku}`,
+      `   VB proposto: ${it.vb} | estoque atual: ${it.estoque_atual} | media mensal: ${it.media_mensal.toFixed(1)} un/mes | sugestao do BI: ${it.vb_bi}`,
+      `   Leitura: ${it.leitura}`,
+    ].join('\n')),
+  ].join('\n');
+
+  const fallback = revisaoFallback(pdv, itens);
+
+  try {
+    const resp = await fetch(IA_URL, {
+      method: 'POST',
+      signal: AbortSignal.timeout(IA_TIMEOUT_MS),
+      headers: Object.assign({ 'Content-Type': 'application/json' },
+        IA_API_KEY ? { Authorization: `Bearer ${IA_API_KEY}` } : {}),
+      body: JSON.stringify({
+        model: IA_MODELO,
+        temperature: 0.15,
+        max_tokens: 700,
+        response_format: { type: 'json_object' },
+        messages: [
+          { role: 'system', content: IA_SISTEMA },
+          { role: 'user', content: contextoUsuario },
+        ],
+      }),
+    });
+    if (!resp.ok) throw new Error(`modelo respondeu ${resp.status}`);
+
+    const bruto = (await resp.json()).choices?.[0]?.message?.content ?? '';
+    let parsed = null;
+    try { parsed = JSON.parse(bruto); }
+    catch {
+      const m = bruto.match(/\{[\s\S]*\}/);
+      if (m) { try { parsed = JSON.parse(m[0]); } catch { /* segue nulo */ } }
+    }
+    if (!parsed?.contexto || !Array.isArray(parsed.comentarios)) {
+      throw new Error('resposta fora do formato');
+    }
+
+    // casa cada comentário com o SKU correspondente; o que faltar usa o fallback
+    const comentarios = itens.map((it, n) => {
+      const achado = parsed.comentarios.find(
+        (c) => String(c.sku || '').trim().toLowerCase() === it.sku.toLowerCase()
+      ) || parsed.comentarios[n];
+      const texto = achado?.texto ? String(achado.texto).slice(0, 300) : fallback.comentarios[n].texto;
+      return { ean: it.ean, sku: it.sku, vb: it.vb, alerta: it.alerta, texto };
+    });
+
+    res.json({
+      contexto: String(parsed.contexto).slice(0, 400),
+      comentarios,
+      modelo: IA_MODELO,
+      origem: 'ia',
+    });
+  } catch (err) {
+    console.error('[IA revisão]', err.message);
+    // degrada para a leitura determinística — o fluxo nunca trava por causa da IA
+    res.json({
+      contexto: fallback.contexto,
+      comentarios: itens.map((it, n) => ({
+        ean: it.ean, sku: it.sku, vb: it.vb, alerta: it.alerta,
+        texto: fallback.comentarios[n].texto,
+      })),
+      modelo: IA_MODELO,
+      origem: 'fallback',
+      aviso: 'O assistente de IA não respondeu; abaixo está a leitura automática dos números.',
+    });
+  }
+}));
+
 const SKU_POR_EAN = {
   '7896806601243': 'Isolado 30 mL',
   '7896806601281': 'Isolado 10 mL',
@@ -439,6 +714,15 @@ app.post('/api/sugestoes', auth(), asyncRoute(async (req, res) => {
     SELECT * FROM trade_fv.fato_adequacao_estoque_unpivot
     WHERE "CNPJ" = $1 AND "EAN" = $2 LIMIT 1
   `, [cnpjNum, ean]);
+
+  // Sugerir exatamente o VB que o BI já sugere não é uma sugestão. O front
+  // barra antes de enviar; aqui é a garantia no servidor.
+  const idealAtual = snap.rows[0]?.['Estoque Ideal'];
+  if (!modoBia && idealAtual != null && Number(idealAtual) === vb) {
+    return res.status(409).json({
+      error: `O VB ${vb} que você sugeriu para ${SKU_POR_EAN[ean]} já é o VB sugerido atualmente neste PDV. Ajuste o valor e tente novamente.`,
+    });
+  }
 
   const s = snap.rows[0] || {
     'CNPJ': cnpjNum,
@@ -490,13 +774,13 @@ app.post('/api/sugestoes', auth(), asyncRoute(async (req, res) => {
 // GET /api/sugestoes — ?rep= | ?cnpj= | (admin) ?all=1[&rep=&status=]
 // ----------------------------------------------------------------------------
 app.get('/api/sugestoes', auth(), asyncRoute(async (req, res) => {
-  // histórico de sugestões é exclusivo ao admin/BI&A
-  if (req.role !== 'admin') return res.json([]);
-
-  const rep = (req.query.rep || '').trim();
-  const cnpj = (req.query.cnpj || '').replace(/\D/g, '');
-  const all = req.query.all === '1';
-  const status = (req.query.status || '').trim().toUpperCase();
+  const isAdmin = req.role === 'admin';
+  // RLS: o representante só enxerga as PRÓPRIAS sugestões (nunca as de terceiros,
+  // nem por CNPJ). Os filtros livres são exclusivos do admin/BI&A.
+  const rep = isAdmin ? (req.query.rep || '').trim() : (req.sessao.territorio || '');
+  const cnpj = isAdmin ? (req.query.cnpj || '').replace(/\D/g, '') : '';
+  const all = isAdmin && req.query.all === '1';
+  const status = isAdmin ? (req.query.status || '').trim().toUpperCase() : '';
   if (!all && !rep && !cnpj) return res.json([]);
 
   const where = [];
@@ -536,16 +820,18 @@ app.patch('/api/sugestoes/:id', auth(['admin']), asyncRoute(async (req, res) => 
     return res.status(400).json({ error: 'Ação inválida. Use APROVADA ou RECUSADA.' });
   }
 
+  // registra QUEM decidiu (mesmo formato do modo BI&A no POST): "BI&A (Nome)"
+  const decididoPor = `BI&A (${req.sessao.nome || req.sessao.usuario})`;
   const { rows } = await pool.query(`
     UPDATE trade_fv.sugestao_fv
     SET status_aprovacao = $1,
-        decidido_por = 'BI&A (admin)',
+        decidido_por = $2,
         decidido_em = now(),
         updated_at = now()
-    WHERE id = $2 AND status_aprovacao = 'PENDENTE'
+    WHERE id = $3 AND status_aprovacao = 'PENDENTE'
     RETURNING id, "CNPJ" AS cnpj, "SKU" AS sku, "Sugestao VB" AS sugestao_vb,
               "Representante" AS representante, status_aprovacao, decidido_em
-  `, [acao, id]);
+  `, [acao, decididoPor, id]);
 
   if (!rows.length) {
     return res.status(404).json({ error: 'Sugestão não encontrada ou já decidida.' });
@@ -566,6 +852,18 @@ app.get(ROTAS_SPA, (_req, res) => res.sendFile(path.join(__dirname, 'public', 'i
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`indicacao_pdvs_fv rodando em http://localhost:${PORT}`);
+  // Aquece o modelo: a 1ª chamada carrega os pesos na memória e leva ~70s;
+  // depois de quente responde em ~2s. Falha aqui é irrelevante (o endpoint
+  // degrada sozinho se a IA não estiver disponível).
+  fetch(IA_URL, {
+    method: 'POST',
+    signal: AbortSignal.timeout(120000),
+    headers: Object.assign({ 'Content-Type': 'application/json' },
+      IA_API_KEY ? { Authorization: `Bearer ${IA_API_KEY}` } : {}),
+    body: JSON.stringify({ model: IA_MODELO, max_tokens: 1, messages: [{ role: 'user', content: 'ok' }] }),
+  }).then(() => console.log(`IA pronta (${IA_MODELO})`))
+    .catch((e) => console.log(`IA indisponível no boot (${e.message}) — o app segue sem recomendação`));
+
   // novos representantes ativos ganham usuário/senha padrão automaticamente
   sincronizarUsuarios().catch((e) => console.error('sync usuários falhou:', e.message));
   setInterval(() => sincronizarUsuarios().catch((e) => console.error('sync usuários falhou:', e.message)),

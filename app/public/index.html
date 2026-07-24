@@ -4,37 +4,58 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Ease Labs — Indicação de PDVs</title>
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%235558D4'/%3E%3Cpath d='M8 22V12l8-5 8 5v10' stroke='white' stroke-width='2.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+  <link rel="icon" type="image/png" href="/favicon.png">
+  <link rel="apple-touch-icon" href="/favicon.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
   <link rel="stylesheet" href="/styles.css">
 </head>
-<body>
-  <div class="page">
+<!-- Fundo da página: bg-gradiente (original) | bg-neutro | bg-pontos | bg-suave -->
+<body class="bg-gradiente">
 
-    <!-- HEADER -->
-    <header class="corp-header">
-      <div class="corp-brand">
+  <!-- APP SHELL: barra de navegação superior -->
+  <header class="topbar" id="topbar" style="display:none">
+    <div class="topbar-inner">
+      <button class="topbar-logo" id="btnLogoHome" title="Ir para o início">
         <span class="logo-crop logo-header"><img src="/logo.png" alt="Ease Labs"></span>
-        <div>
-          <div class="corp-title">Indicação de PDVs</div>
-          <div class="corp-subtitle">Força de Vendas — sugestão de positivação e volume base (VB)</div>
+      </button>
+      <nav class="topnav" id="topnav" aria-label="Navegação principal"></nav>
+
+      <div class="topbar-user" id="topbarUser">
+        <button class="user-trigger" id="userTrigger" aria-haspopup="true" aria-expanded="false">
+          <div class="avatar" id="headerUserAvatar"></div>
+          <span class="user-name">
+            <span id="headerUserName"></span>
+            <span class="user-role" id="headerUserRole">Representante</span>
+          </span>
+          <svg class="user-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+        </button>
+        <div class="dropdown-menu user-menu" id="userMenu">
+          <div class="dropdown-head">
+            <strong id="menuUserName"></strong>
+            <span id="menuUserSub"></span>
+          </div>
+          <button class="dropdown-item" id="btnTrocarRep">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/></svg>
+            Trocar representante
+          </button>
+          <button class="dropdown-item" id="btnAlterarSenha">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+            Alterar senha
+          </button>
+          <div class="dropdown-sep"></div>
+          <button class="dropdown-item dropdown-item-danger" id="btnSair">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/></svg>
+            Sair
+          </button>
         </div>
       </div>
-      <div class="header-user" id="headerUser">
-        <span class="badge badge-accent" id="headerRole" style="display:none"></span>
-        <div class="user-name" id="headerUserNameWrap">
-          <span id="headerUserName"></span>
-          <span class="user-role" id="headerUserRole">Representante</span>
-        </div>
-        <div class="avatar" id="headerUserAvatar"></div>
-        <button class="btn-trocar" id="btnTrocarRep" title="Trocar representante">Trocar</button>
-        <button class="btn-trocar" id="btnAlterarSenha" title="Alterar minha senha">Alterar senha</button>
-        <button class="btn-trocar" id="btnSair" title="Encerrar sessão">Sair</button>
-      </div>
-    </header>
+    </div>
+  </header>
+
+  <div class="page" id="page">
 
     <!-- LOGIN -->
     <section class="panel" id="panel-login">
@@ -57,10 +78,23 @@
       </div>
     </section>
 
-    <!-- ADMIN HOME -->
+    <!-- ADMIN HOME (dashboard) -->
     <section class="panel" id="panel-admin">
-      <h1 class="panel-title">Painel do Administrador</h1>
-      <p class="panel-desc">Escolha como você quer atuar agora.</p>
+      <div class="page-head">
+        <div>
+          <h1 class="panel-title">Painel</h1>
+          <p class="panel-desc">Visão geral das indicações da Força de Vendas.</p>
+        </div>
+      </div>
+
+      <div class="kpi-grid" id="kpiGrid">
+        <div class="kpi-card skeleton-kpi"></div>
+        <div class="kpi-card skeleton-kpi"></div>
+        <div class="kpi-card skeleton-kpi"></div>
+        <div class="kpi-card skeleton-kpi"></div>
+      </div>
+
+      <h2 class="section-label">Ações rápidas</h2>
       <div class="admin-choices">
         <button class="admin-choice" id="btnAdminComoRep">
           <div class="admin-choice-icon">
@@ -80,35 +114,17 @@
             <div class="admin-choice-desc">Busque um PDV e defina o VB diretamente como BI&amp;A — entra já aprovado na sugestão oficial.</div>
           </div>
         </button>
-        <button class="admin-choice" id="btnAdminAprovacoes">
-          <div class="admin-choice-icon green">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
-          </div>
-          <div>
-            <div class="admin-choice-title">Aprovações (BI&amp;A)</div>
-            <div class="admin-choice-desc">Veja todas as sugestões enviadas, filtre por representante e aprove ou recuse.</div>
-          </div>
-        </button>
-        <button class="admin-choice" id="btnAdminUsuarios">
-          <div class="admin-choice-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
-          </div>
-          <div>
-            <div class="admin-choice-title">Usuários</div>
-            <div class="admin-choice-desc">Representantes ativos e administradores — sincronize e redefina senhas.</div>
-          </div>
-        </button>
       </div>
     </section>
 
     <!-- ADMIN: USUÁRIOS -->
     <section class="panel" id="panel-usuarios">
-      <button class="back-link" id="btnUsuariosVoltar">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
-        Voltar ao painel
-      </button>
-      <h1 class="panel-title">Usuários</h1>
-      <p class="panel-desc">Representantes com CT ativo ganham usuário automaticamente (sincronização no início do dia e sob demanda). "Redefinir" volta a senha para a padrão inicial.</p>
+      <div class="page-head">
+        <div>
+          <h1 class="panel-title">Usuários</h1>
+          <p class="panel-desc">Representantes com CT ativo ganham usuário automaticamente (sincronização no início do dia e sob demanda). "Redefinir" volta a senha para a padrão inicial.</p>
+        </div>
+      </div>
 
       <div class="aprov-filtros">
         <button class="btn btn-secondary" id="btnSyncUsuarios">
@@ -140,15 +156,28 @@
         <div class="card-body" style="display:flex;flex-direction:column;gap:16px">
           <div class="input-group">
             <label class="input-label" for="senhaAtual">Senha atual</label>
-            <input class="input-field" id="senhaAtual" type="password" autocomplete="current-password">
+            <div class="input-senha">
+              <input class="input-field" id="senhaAtual" type="password" autocomplete="current-password">
+              <button type="button" class="btn-olho" data-alvo="senhaAtual" aria-label="Exibir senha" aria-pressed="false"></button>
+            </div>
           </div>
           <div class="input-group">
             <label class="input-label" for="senhaNova">Nova senha</label>
-            <input class="input-field" id="senhaNova" type="password" autocomplete="new-password">
+            <div class="input-senha">
+              <input class="input-field" id="senhaNova" type="password" autocomplete="new-password">
+              <button type="button" class="btn-olho" data-alvo="senhaNova" aria-label="Exibir senha" aria-pressed="false"></button>
+            </div>
           </div>
           <div class="input-group">
             <label class="input-label" for="senhaNova2">Confirmar nova senha</label>
-            <input class="input-field" id="senhaNova2" type="password" autocomplete="new-password">
+            <div class="input-senha">
+              <input class="input-field" id="senhaNova2" type="password" autocomplete="new-password">
+              <button type="button" class="btn-olho" data-alvo="senhaNova2" aria-label="Exibir senha" aria-pressed="false"></button>
+            </div>
+          </div>
+          <div class="aviso-senha">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            <span><strong>Guarde bem esta senha.</strong> Ela é pessoal e só você tem acesso a ela.</span>
           </div>
           <div class="input-error-msg" id="senhaErro" style="display:none"></div>
           <button class="btn btn-primary btn-lg" id="btnSalvarSenha">Salvar nova senha</button>
@@ -158,12 +187,12 @@
 
     <!-- ADMIN: APROVAÇÕES -->
     <section class="panel" id="panel-aprovacoes">
-      <button class="back-link" id="btnVoltarAdmin">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
-        Voltar ao painel
-      </button>
-      <h1 class="panel-title">Aprovações — BI&amp;A</h1>
-      <p class="panel-desc">Sugestões enviadas pela Força de Vendas. Aprovar incorpora o VB do representante à sugestão oficial na tabela trade_fv.fato_adequacao_estoque_unpivot_ajustada.</p>
+      <div class="page-head">
+        <div>
+          <h1 class="panel-title">Aprovações — BI&amp;A</h1>
+          <p class="panel-desc">Sugestões enviadas pela Força de Vendas. Aprovar incorpora o VB do representante à sugestão oficial na tabela trade_fv.fato_adequacao_estoque_unpivot_ajustada.</p>
+        </div>
+      </div>
 
       <div class="aprov-filtros">
         <div class="input-group">
@@ -307,6 +336,31 @@
 
     </section>
 
+    <!-- MINHAS SUGESTÕES (representante) -->
+    <section class="panel" id="panel-sugestoes">
+      <div class="page-head">
+        <div>
+          <h1 class="panel-title">Minhas sugestões</h1>
+          <p class="panel-desc">Acompanhe aqui o que você já enviou e em que pé está a análise do time de BI&amp;A.</p>
+        </div>
+        <div class="aprov-stats" id="minhasStats"></div>
+      </div>
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr><th>Enviada</th><th>PDV</th><th>Cidade</th><th>Rede</th><th>SKU</th><th>Estq. atual</th><th>VB Sugerido BI</th><th>Meu VB</th><th>Und/mês</th><th>Status</th><th>Decisão</th></tr>
+          </thead>
+          <tbody id="minhasSugestoesBody"></tbody>
+        </table>
+      </div>
+      <div class="empty-state" id="minhasVazio" style="display:none">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/></svg>
+        <strong>Você ainda não enviou nenhuma sugestão</strong>
+        <span>Assim que indicar um PDV, ele aparece aqui com o status da análise.</span>
+        <button class="btn btn-primary" id="btnVaziaNova">Fazer minha primeira sugestão</button>
+      </div>
+    </section>
+
     <!-- ETAPA 3: VALIDAR PDV -->
     <section class="panel" id="panel-3">
       <button class="back-link" id="btnVoltarBusca">
@@ -337,7 +391,7 @@
         <div class="submit-resumo" id="submitResumo"></div>
         <button class="btn btn-success btn-lg" id="btnEnviar">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
-          Enviar sugestão
+          <span id="btnEnviarTexto">Enviar sugestão</span>
         </button>
       </div>
     </section>
@@ -361,6 +415,34 @@
     </section>
 
   </div>
+
+  <!-- REVISÃO DA IA antes de confirmar o envio -->
+  <div class="modal-overlay" id="modalRevisao" style="display:none">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="revisaoTitulo">
+      <div class="modal-head">
+        <div class="modal-titulo">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9L12 3z"/><path d="M19 15l.7 1.8L21.5 18l-1.8.7L19 20.5l-.7-1.8L16.5 18l1.8-.7L19 15z"/></svg>
+          <h2 id="revisaoTitulo">Antes de enviar</h2>
+        </div>
+        <span class="ia-modelo" id="revisaoModelo"></span>
+      </div>
+      <div class="modal-corpo" id="revisaoConteudo"></div>
+      <div class="modal-rodape">
+        <button class="btn btn-ghost" id="btnVoltarAjustar">Voltar e ajustar</button>
+        <button class="btn btn-success btn-lg" id="btnConfirmarEnvio">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+          Confirmar envio
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <footer class="app-footer" id="appFooter" style="display:none">
+    <span>Ease Labs · Indicação de PDVs</span>
+    <span class="footer-sep">·</span>
+    <span>Força de Vendas</span>
+  </footer>
+
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   <script src="/app.js"></script>
 </body>

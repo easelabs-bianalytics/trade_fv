@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ease Labs — Indicação de PDVs</title>
+  <link rel="icon" type="image/png" href="/favicon.png">
+  <link rel="apple-touch-icon" href="/favicon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<!-- Fundo da página: bg-gradiente (original) | bg-neutro | bg-pontos | bg-suave -->
+<body class="bg-gradiente">
+
+  <!-- APP SHELL: barra de navegação superior -->
+  <header class="topbar" id="topbar" style="display:none">
+    <div class="topbar-inner">
+      <button class="topbar-logo" id="btnLogoHome" title="Ir para o início">
+        <span class="logo-crop logo-header"><img src="/logo.png" alt="Ease Labs"></span>
+      </button>
+      <nav class="topnav" id="topnav" aria-label="Navegação principal"></nav>
+
+      <div class="topbar-user" id="topbarUser">
+        <button class="user-trigger" id="userTrigger" aria-haspopup="true" aria-expanded="false">
+          <div class="avatar" id="headerUserAvatar"></div>
+          <span class="user-name">
+            <span id="headerUserName"></span>
+            <span class="user-role" id="headerUserRole">Representante</span>
+          </span>
+          <svg class="user-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+        </button>
+        <div class="dropdown-menu user-menu" id="userMenu">
+          <div class="dropdown-head">
+            <strong id="menuUserName"></strong>
+            <span id="menuUserSub"></span>
+          </div>
+          <button class="dropdown-item" id="btnTrocarRep">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/></svg>
+            Trocar representante
+          </button>
+          <button class="dropdown-item" id="btnAlterarSenha">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+            Alterar senha
+          </button>
+          <div class="dropdown-sep"></div>
+          <button class="dropdown-item dropdown-item-danger" id="btnSair">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/></svg>
+            Sair
+          </button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <div class="page" id="page">
+
+    <!-- LOGIN -->
+    <section class="panel" id="panel-login">
+      <div class="login-wrap">
+        <div class="login-card">
+          <span class="logo-crop logo-login"><img src="/logo.png" alt="Ease Labs"></span>
+          <h1>Entre na sua conta</h1>
+          <div class="input-group">
+            <label class="input-label" for="loginUser">Usuário</label>
+            <input class="input-field" id="loginUser" type="text" autocomplete="username">
+          </div>
+          <div class="input-group">
+            <label class="input-label" for="loginPass">Senha</label>
+            <input class="input-field" id="loginPass" type="password" autocomplete="current-password">
+          </div>
+          <div class="input-error-msg" id="loginErro" style="display:none"></div>
+          <button class="btn btn-primary btn-lg btn-full" id="btnLogin">Entrar</button>
+          <p class="login-footnote">Indicação de PDVs · Força de Vendas</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ADMIN HOME (dashboard) -->
+    <section class="panel" id="panel-admin">
+      <div class="page-head">
+        <div>
+          <h1 class="panel-title">Painel</h1>
+          <p class="panel-desc">Visão geral das indicações da Força de Vendas.</p>
+        </div>
+      </div>
+
+      <div class="kpi-grid" id="kpiGrid">
+        <div class="kpi-card skeleton-kpi"></div>
+        <div class="kpi-card skeleton-kpi"></div>
+        <div class="kpi-card skeleton-kpi"></div>
+        <div class="kpi-card skeleton-kpi"></div>
+      </div>
+
+      <h2 class="section-label">Ações rápidas</h2>
+      <div class="admin-choices">
+        <button class="admin-choice" id="btnAdminComoRep">
+          <div class="admin-choice-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          </div>
+          <div>
+            <div class="admin-choice-title">Fluxo do Representante</div>
+            <div class="admin-choice-desc">Percorra o fluxo de sugestão exatamente como um representante vê.</div>
+          </div>
+        </button>
+        <button class="admin-choice" id="btnAdminBia">
+          <div class="admin-choice-icon accent">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20V10M18 20V4M6 20v-4"/></svg>
+          </div>
+          <div>
+            <div class="admin-choice-title">Ajustar VB (BI&amp;A)</div>
+            <div class="admin-choice-desc">Busque um PDV e defina o VB diretamente como BI&amp;A — entra já aprovado na sugestão oficial.</div>
+          </div>
+        </button>
+      </div>
+    </section>
+
+    <!-- ADMIN: USUÁRIOS -->
+    <section class="panel" id="panel-usuarios">
+      <div class="page-head">
+        <div>
+          <h1 class="panel-title">Usuários</h1>
+          <p class="panel-desc">Representantes com CT ativo ganham usuário automaticamente (sincronização no início do dia e sob demanda). "Redefinir" volta a senha para a padrão inicial.</p>
+        </div>
+      </div>
+
+      <div class="aprov-filtros">
+        <button class="btn btn-secondary" id="btnSyncUsuarios">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+          Sincronizar representantes
+        </button>
+        <div class="aprov-stats" id="usuariosStats"></div>
+      </div>
+
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr><th>Usuário</th><th>Nome</th><th>Papel</th><th>Território</th><th>Situação</th><th>Senha</th><th>Último login</th><th>Ações</th></tr>
+          </thead>
+          <tbody id="usuariosBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ALTERAR SENHA -->
+    <section class="panel" id="panel-senha">
+      <button class="back-link" id="btnSenhaVoltar">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+        Voltar
+      </button>
+      <h1 class="panel-title">Alterar minha senha</h1>
+      <p class="panel-desc">Por segurança, troque a senha padrão inicial por uma senha só sua (mínimo de 8 caracteres).</p>
+      <div class="card" style="max-width:460px">
+        <div class="card-body" style="display:flex;flex-direction:column;gap:16px">
+          <div class="input-group">
+            <label class="input-label" for="senhaAtual">Senha atual</label>
+            <div class="input-senha">
+              <input class="input-field" id="senhaAtual" type="password" autocomplete="current-password">
+              <button type="button" class="btn-olho" data-alvo="senhaAtual" aria-label="Exibir senha" aria-pressed="false"></button>
+            </div>
+          </div>
+          <div class="input-group">
+            <label class="input-label" for="senhaNova">Nova senha</label>
+            <div class="input-senha">
+              <input class="input-field" id="senhaNova" type="password" autocomplete="new-password">
+              <button type="button" class="btn-olho" data-alvo="senhaNova" aria-label="Exibir senha" aria-pressed="false"></button>
+            </div>
+          </div>
+          <div class="input-group">
+            <label class="input-label" for="senhaNova2">Confirmar nova senha</label>
+            <div class="input-senha">
+              <input class="input-field" id="senhaNova2" type="password" autocomplete="new-password">
+              <button type="button" class="btn-olho" data-alvo="senhaNova2" aria-label="Exibir senha" aria-pressed="false"></button>
+            </div>
+          </div>
+          <div class="aviso-senha">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            <span><strong>Guarde bem esta senha.</strong> Ela é pessoal e só você tem acesso a ela.</span>
+          </div>
+          <div class="input-error-msg" id="senhaErro" style="display:none"></div>
+          <button class="btn btn-primary btn-lg" id="btnSalvarSenha">Salvar nova senha</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ADMIN: APROVAÇÕES -->
+    <section class="panel" id="panel-aprovacoes">
+      <div class="page-head">
+        <div>
+          <h1 class="panel-title">Aprovações — BI&amp;A</h1>
+          <p class="panel-desc">Sugestões enviadas pela Força de Vendas. Aprovar incorpora o VB do representante à sugestão oficial na tabela trade_fv.fato_adequacao_estoque_unpivot_ajustada.</p>
+        </div>
+      </div>
+
+      <div class="aprov-filtros">
+        <div class="input-group">
+          <label class="input-label" for="fRep">Representante</label>
+          <select class="input-field input-select" id="fRep"><option value="">Todos</option></select>
+        </div>
+        <div class="input-group">
+          <label class="input-label" for="fStatus">Status</label>
+          <select class="input-field input-select" id="fStatus">
+            <option value="">Todos</option>
+            <option value="PENDENTE" selected>Pendentes</option>
+            <option value="APROVADA">Aprovadas</option>
+            <option value="RECUSADA">Recusadas</option>
+          </select>
+        </div>
+        <div class="aprov-stats" id="aprovStats"></div>
+      </div>
+
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr><th>Enviada</th><th>Representante</th><th>PDV</th><th>Rede</th><th>SKU</th><th>Estq. atual</th><th>VB Sugerido BI</th><th>VB Sugerido REP</th><th>Und/mês</th><th>Status</th><th>Ações</th></tr>
+          </thead>
+          <tbody id="aprovBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- STEPPER -->
+    <nav class="stepper" id="stepper" aria-label="Progresso" style="display:none">
+      <div class="step" data-step="1">
+        <div class="step-line-fill"></div>
+        <div class="step-dot">1</div>
+        <div class="step-label">Representante</div>
+      </div>
+      <div class="step" data-step="2">
+        <div class="step-line-fill"></div>
+        <div class="step-dot">2</div>
+        <div class="step-label">Buscar PDV</div>
+      </div>
+      <div class="step" data-step="3">
+        <div class="step-line-fill"></div>
+        <div class="step-dot">3</div>
+        <div class="step-label">Validar PDV</div>
+      </div>
+      <div class="step" data-step="4">
+        <div class="step-dot">4</div>
+        <div class="step-label">Sugerir VB</div>
+      </div>
+    </nav>
+
+    <!-- ETAPA 1: REPRESENTANTE -->
+    <section class="panel" id="panel-1">
+      <button class="back-link" id="btnEtapa1VoltarAdmin" style="display:none">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+        Voltar ao painel do administrador
+      </button>
+      <h1 class="panel-title">Fluxo do Representante</h1>
+      <p class="panel-desc">Escolha o representante para quem você quer sugerir PDVs.</p>
+
+      <div class="input-with-icon">
+        <span class="input-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+        </span>
+        <input class="input-field" id="repSearch" type="text" placeholder="Buscar representante..." autocomplete="off">
+      </div>
+
+      <div class="rep-list" id="repList">
+        <div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>
+        <div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>
+      </div>
+    </section>
+
+    <!-- ETAPA 2: BUSCAR PDV -->
+    <section class="panel" id="panel-2">
+      <button class="back-link" id="btnEtapa2Voltar" style="display:none">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+        Voltar ao painel
+      </button>
+      <h1 class="panel-title">Encontre o PDV</h1>
+      <p class="panel-desc">Busque pelo <strong>CNPJ</strong>, <strong>nome</strong> ou <strong>cidade</strong> do ponto de venda que você quer indicar.</p>
+
+      <div class="input-with-icon">
+        <span class="input-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+        </span>
+        <input class="input-field" id="pdvSearch" type="text" placeholder="Ex.: 61.585.865/0001-51, Droga Raia, Porto Alegre..." autocomplete="off">
+      </div>
+
+      <div class="search-results" id="pdvResults"></div>
+
+      <!-- CADASTRO MANUAL -->
+      <div class="manual-pdv" id="manualPdv">
+        <button class="manual-pdv-trigger" id="manualTrigger">
+          <div class="manual-trigger-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+          </div>
+          <div class="manual-trigger-text">
+            <strong>Não encontrou o PDV?</strong>
+            <span>Cadastre manualmente e siga com a sugestão normalmente.</span>
+          </div>
+          <svg class="manual-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+        </button>
+        <div class="manual-pdv-form" id="manualForm">
+          <div class="manual-form-grid">
+            <div class="input-group span-2">
+              <label class="input-label" for="mCnpj">CNPJ <span class="req">*</span></label>
+              <input class="input-field" id="mCnpj" type="text" inputmode="numeric" placeholder="00.000.000/0000-00" autocomplete="off" maxlength="18">
+              <div class="input-error-msg" id="mCnpjErro" style="display:none"></div>
+            </div>
+            <div class="input-group span-2">
+              <label class="input-label" for="mNome">Nome do PDV <span class="req">*</span></label>
+              <input class="input-field" id="mNome" type="text" placeholder="Ex.: Drogaria São Paulo — Centro" autocomplete="off">
+            </div>
+            <div class="input-group span-2">
+              <label class="input-label" for="mRede">Rede <span class="req">*</span></label>
+              <select class="input-field input-select" id="mRede">
+                <option value="">Selecione a rede...</option>
+              </select>
+            </div>
+            <div class="input-group">
+              <label class="input-label" for="mCidade">Cidade</label>
+              <input class="input-field" id="mCidade" type="text" placeholder="Ex.: Campinas" autocomplete="off">
+            </div>
+            <div class="input-group">
+              <label class="input-label" for="mUf">UF</label>
+              <select class="input-field input-select" id="mUf">
+                <option value="">—</option>
+              </select>
+            </div>
+          </div>
+          <div class="manual-form-footer">
+            <span class="input-hint">Se o CNPJ já existir na base, carregamos os dados oficiais automaticamente.</span>
+            <button class="btn btn-primary" id="btnManualContinuar">
+              Continuar
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+            </button>
+          </div>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- MINHAS SUGESTÕES (representante) -->
+    <section class="panel" id="panel-sugestoes">
+      <div class="page-head">
+        <div>
+          <h1 class="panel-title">Minhas sugestões</h1>
+          <p class="panel-desc">Acompanhe aqui o que você já enviou e em que pé está a análise do time de BI&amp;A.</p>
+        </div>
+        <div class="aprov-stats" id="minhasStats"></div>
+      </div>
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr><th>Enviada</th><th>PDV</th><th>Cidade</th><th>Rede</th><th>SKU</th><th>Estq. atual</th><th>VB Sugerido BI</th><th>Meu VB</th><th>Und/mês</th><th>Status</th><th>Decisão</th></tr>
+          </thead>
+          <tbody id="minhasSugestoesBody"></tbody>
+        </table>
+      </div>
+      <div class="empty-state" id="minhasVazio" style="display:none">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/></svg>
+        <strong>Você ainda não enviou nenhuma sugestão</strong>
+        <span>Assim que indicar um PDV, ele aparece aqui com o status da análise.</span>
+        <button class="btn btn-primary" id="btnVaziaNova">Fazer minha primeira sugestão</button>
+      </div>
+    </section>
+
+    <!-- ETAPA 3: VALIDAR PDV -->
+    <section class="panel" id="panel-3">
+      <button class="back-link" id="btnVoltarBusca">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+        Voltar para a busca
+      </button>
+      <h1 class="panel-title">Esse é o PDV certo?</h1>
+      <p class="panel-desc">Confira os dados do estabelecimento antes de continuar.</p>
+
+      <div class="card" id="pdvValidacaoCard"></div>
+    </section>
+
+    <!-- ETAPA 4: SKUs + SUGESTÃO -->
+    <section class="panel" id="panel-4">
+      <button class="back-link" id="btnVoltarValidacao">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+        Voltar
+      </button>
+
+      <div class="pdv-context-bar" id="pdvContextBar"></div>
+
+      <h1 class="panel-title">Escolha o SKU e sugira o VB</h1>
+      <p class="panel-desc">Veja a situação atual de estoque de cada produto e a sugestão atual. Selecione um SKU para informar o volume base que você recomenda.</p>
+
+      <div class="sku-grid" id="skuGrid"></div>
+
+      <div class="submit-bar" id="submitBar" style="display:none">
+        <div class="submit-resumo" id="submitResumo"></div>
+        <button class="btn btn-success btn-lg" id="btnEnviar">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+          <span id="btnEnviarTexto">Enviar sugestão</span>
+        </button>
+      </div>
+    </section>
+
+    <!-- SUCESSO -->
+    <section class="panel" id="panel-5">
+      <div class="card">
+        <div class="success-wrap">
+          <div class="success-check">
+            <svg viewBox="0 0 24 24"><path d="M4.5 12.5l5 5 10-11"/></svg>
+          </div>
+          <h2 id="successTitle">Sugestão enviada!</h2>
+          <p id="successMsg">Sua indicação foi registrada e está <strong>aguardando análise do BI&amp;A</strong>.</p>
+          <div class="success-detail" id="successDetail"></div>
+          <div class="success-actions">
+            <button class="btn btn-primary" id="btnOutroSku">Sugerir outro SKU deste PDV</button>
+            <button class="btn btn-secondary" id="btnNovoPdv">Indicar outro PDV</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </div>
+
+  <!-- REVISÃO DA IA antes de confirmar o envio -->
+  <div class="modal-overlay" id="modalRevisao" style="display:none">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="revisaoTitulo">
+      <div class="modal-head">
+        <div class="modal-titulo">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9L12 3z"/><path d="M19 15l.7 1.8L21.5 18l-1.8.7L19 20.5l-.7-1.8L16.5 18l1.8-.7L19 15z"/></svg>
+          <h2 id="revisaoTitulo">Antes de enviar</h2>
+        </div>
+        <span class="ia-modelo" id="revisaoModelo"></span>
+      </div>
+      <div class="modal-corpo" id="revisaoConteudo"></div>
+      <div class="modal-rodape">
+        <button class="btn btn-ghost" id="btnVoltarAjustar">Voltar e ajustar</button>
+        <button class="btn btn-success btn-lg" id="btnConfirmarEnvio">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+          Confirmar envio
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <footer class="app-footer" id="appFooter" style="display:none">
+    <span>Ease Labs · Indicação de PDVs</span>
+    <span class="footer-sep">·</span>
+    <span>Força de Vendas</span>
+  </footer>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script src="/app.js"></script>
+</body>
+</html>

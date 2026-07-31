@@ -1,0 +1,14 @@
+# Segredos / credenciais
+.env
+.env.*
+*.env
+
+# CSVs de validacao / dados
+*.csv
+
+# Node
+node_modules/
+
+# Sistema
+.DS_Store
+Thumbs.db

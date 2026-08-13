@@ -33,7 +33,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 const AUTH_SECRET = process.env.APP_AUTH_SECRET || 'trade-fv-mvp-secret';
 const SENHA_PADRAO = process.env.APP_SENHA_PADRAO || 'easelabs@2026';
 const SESSAO_HORAS = 12;
-const ADMINS_SEED = ['paulo_lima', 'rubens_filho', 'natalia_miranda'];
+const ADMINS_SEED = ['paulo_lima', 'rubens_filho', 'natalia_miranda', 'fernando_franco'];
 
 const hashSenha = (senha) => {
   const salt = crypto.randomBytes(16).toString('hex');

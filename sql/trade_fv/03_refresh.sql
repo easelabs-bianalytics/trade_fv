@@ -4,10 +4,11 @@
 --
 --  A ORDEM importa (dependencias):
 --    1) fato_cdd_90_dias_agrupada   (base: cddd.fato_cdd)
---    2) fato_todos_pdvs             (le a matview fato_cdd_90 + view analise_estoque_pdv)
+--    2) fato_todos_pdvs             (le a matview fato_cdd_90 + estoque_redes.analise_estoque_pdv)
 --    3) fato_adequacao_estoque      (le a matview fato_todos_pdvs)
 --
---  OBS: analise_estoque_pdv continua sendo VIEW (dados ao vivo) e NAO precisa refresh.
+--  OBS: estoque_redes.analise_estoque_pdv (schema de origem) continua sendo VIEW
+--  (dados ao vivo) e NAO precisa refresh. Nao ha copia dela em trade_fv.
 -- ================================================================================
 
 SET statement_timeout = '900s';

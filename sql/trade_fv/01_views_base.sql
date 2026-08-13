@@ -4,99 +4,15 @@
 CREATE SCHEMA IF NOT EXISTS trade_fv;
 
 -- =====================================================================
---  1) Cópia exata da view estoque_redes.analise_estoque_pdv
+--  NOTA: a cópia trade_fv.analise_estoque_pdv (que existia aqui) foi
+--  removida — era 100% idêntica (EXCEPT nos dois sentidos = 0) a
+--  estoque_redes.analise_estoque_pdv, sem nenhum objeto no banco nem no
+--  app referenciando-a. A fato_todos_pdvs abaixo já lê a original
+--  (estoque_redes.analise_estoque_pdv) diretamente.
 -- =====================================================================
-CREATE OR REPLACE VIEW trade_fv.analise_estoque_pdv AS
- WITH ultima_data_rede AS (
-         SELECT estoque_redes.rede,
-            max(estoque_redes.data_recebimento) AS ultima_data
-           FROM estoque_redes.estoque_redes
-          GROUP BY estoque_redes.rede
-        ), marca_ultimo AS (
-         SELECT e_1.data_recebimento,
-            e_1.rede,
-            e_1.cnpj,
-            e_1.cod_ean,
-            e_1.estoque_qtde,
-                CASE
-                    WHEN e_1.data_recebimento = u_1.ultima_data THEN 1
-                    ELSE 0
-                END AS is_ultima_atualizacao
-           FROM estoque_redes.estoque_redes e_1
-             JOIN ultima_data_rede u_1 ON e_1.rede::text = u_1.rede::text
-        ), pega_ultimo AS (
-         SELECT marca_ultimo.cnpj,
-            marca_ultimo.cod_ean,
-            marca_ultimo.rede,
-            marca_ultimo.data_recebimento,
-            sum(marca_ultimo.estoque_qtde) AS estoque_qtde
-           FROM marca_ultimo
-          WHERE marca_ultimo.is_ultima_atualizacao = 1
-          GROUP BY marca_ultimo.cnpj, marca_ultimo.cod_ean, marca_ultimo.rede, marca_ultimo.data_recebimento
-        ), pega_ultimo_normalizado AS (
-         SELECT
-                CASE
-                    WHEN pega_ultimo.rede::text = 'INDIANA'::text AND "left"(pega_ultimo.cnpj::text, 2) = '51'::text THEN ('2'::text || "left"(pega_ultimo.cnpj::text, 13))::character varying
-                    ELSE pega_ultimo.cnpj
-                END AS cnpj,
-                CASE
-                    WHEN pega_ultimo.cod_ean::text ~~* 'CANABIDIOL EASE LABS 20MG/ML%'::text THEN '7896806601328'::character varying
-                    ELSE pega_ultimo.cod_ean
-                END AS cod_ean,
-            pega_ultimo.data_recebimento,
-            pega_ultimo.estoque_qtde
-           FROM pega_ultimo
-        ), eans_alvo(ean) AS (
-         VALUES ('7896806601328'::character varying(14)), ('7896806601250'::character varying(14)), ('7896806601281'::character varying(14)), ('7896806601243'::character varying(14))
-        ), eans_ref AS (
-         SELECT d.ean,
-            max(a.desc_apresentacao::text) AS desc_apresentacao
-           FROM estoque_redes.dim_cnpjs_rede d
-             JOIN cddd.apres a ON a.cod_apresentacao = d.cod_apresentacao
-          WHERE d.ean::text = ANY (ARRAY['7896806601328'::text, '7896806601250'::text, '7896806601281'::text, '7896806601243'::text])
-          GROUP BY d.ean
-        ), cat_pdv AS (
-         SELECT dim_cnpjs_rede.cnpj,
-            max(dim_cnpjs_rede.cat_un_mercado) AS cat_un_mercado,
-            max(dim_cnpjs_rede.cat_desconto_mercado) AS cat_desconto_mercado
-           FROM estoque_redes.dim_cnpjs_rede
-          WHERE dim_cnpjs_rede.ean::text = ANY (ARRAY['7896806601328'::text, '7896806601250'::text, '7896806601281'::text, '7896806601243'::text])
-          GROUP BY dim_cnpjs_rede.cnpj
-        ), estoque_pdv AS (
-         SELECT er.cnpj::numeric AS cnpj,
-            er.cod_ean::character varying(14) AS ean,
-            max(er.data_recebimento) AS informe_estoque,
-            sum(er.estoque_qtde) AS estoque
-           FROM pega_ultimo_normalizado er
-          WHERE er.cod_ean::text = ANY (ARRAY['7896806601328'::text, '7896806601250'::text, '7896806601281'::text, '7896806601243'::text])
-          GROUP BY (er.cnpj::numeric), (er.cod_ean::character varying(14))
-        ), universo_pdv AS (
-         SELECT DISTINCT d."CNPJ_PDV"::numeric AS cnpj,
-                CASE
-                    WHEN dp."GRUPO PROVEDOR"::text ~~* 'PAGUE MENOS'::text THEN 'PAGUEMENOS'::character varying
-                    ELSE dp."GRUPO PROVEDOR"
-                END AS rede
-           FROM tdd.dim_pdv d
-             JOIN estoque_redes.depara_tdd dp ON d."COD_PDV" = dp."COD_PDV"
-          WHERE dp."GRUPO PROVEDOR"::text ~~* 'RAIA DROGASIL'::text OR dp."GRUPO PROVEDOR"::text ~~* 'ARAUJO'::text OR dp."GRUPO PROVEDOR"::text ~~* 'CLAMED'::text OR dp."GRUPO PROVEDOR"::text ~~* 'DROGARIA DPSP'::text OR dp."GRUPO PROVEDOR"::text = 'DROGAL'::text OR dp."GRUPO PROVEDOR"::text ~~* 'INDIANA'::text OR dp."GRUPO PROVEDOR"::text ~~* 'PAGUE MENOS'::text OR dp."GRUPO PROVEDOR"::text ~~* 'PANVEL FARMACIAS'::text OR dp."GRUPO PROVEDOR"::text ~~* 'FARMACIA SAO JOAO'::text OR dp."GRUPO PROVEDOR"::text ~~* 'VENANCIO'::text
-        )
- SELECT u.cnpj,
-    lpad(u.cnpj::text, 14, '0'::text) AS cnpj_padronizado,
-    u.rede,
-    e.ean,
-    ref.desc_apresentacao::character varying(200) AS desc_apresentacao,
-    c.cat_un_mercado,
-    c.cat_desconto_mercado,
-    ep.informe_estoque,
-    COALESCE(ep.estoque, 0::double precision) AS estoque
-   FROM universo_pdv u
-     CROSS JOIN eans_alvo e
-     LEFT JOIN estoque_pdv ep ON ep.cnpj = u.cnpj AND ep.ean::text = e.ean::text
-     LEFT JOIN eans_ref ref ON ref.ean::text = e.ean::text
-     LEFT JOIN cat_pdv c ON c.cnpj = u.cnpj;
 
 -- =====================================================================
---  2) View fato_cdd_90_dias_agrupada
+--  1) View fato_cdd_90_dias_agrupada
 --     Tradução do código M (fonte: cddd.fato_cdd)
 -- =====================================================================
 CREATE OR REPLACE VIEW trade_fv.fato_cdd_90_dias_agrupada AS
@@ -164,7 +80,7 @@ FROM por_data
 GROUP BY (cnpj_pdv::text || "EAN"::text), "DESC_APRESENTACAO";
 
 -- =====================================================================
---  3) View fato_todos_pdvs
+--  2) View fato_todos_pdvs
 --     Tradução do código M (fonte: estoque_redes.analise_estoque_pdv)
 -- =====================================================================
 CREATE OR REPLACE VIEW trade_fv.fato_todos_pdvs AS

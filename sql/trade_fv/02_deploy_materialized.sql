@@ -1,10 +1,12 @@
 -- ================================================================================
 --  DEPLOY: transforma as views derivadas de trade_fv em MATERIALIZED VIEWS
 --  Logica 100% identica as views validadas (corpos extraidos do proprio banco).
---  A view trade_fv.analise_estoque_pdv permanece como VIEW (fonte "ao vivo").
+--  A estoque_redes.analise_estoque_pdv (schema de origem) e lida direto, sem copia
+--  em trade_fv (a copia trade_fv.analise_estoque_pdv que existia foi removida por ser
+--  redundante — ver README secao 9, item 7).
 --
 --  Ordem de dependencia:
---    analise_estoque_pdv (VIEW)
+--    estoque_redes.analise_estoque_pdv (VIEW, fonte externa)
 --        -> fato_cdd_90_dias_agrupada (MATVIEW)
 --        -> fato_todos_pdvs (MATVIEW)            [le a matview fato_cdd_90]
 --        -> fato_adequacao_estoque (MATVIEW)     [le a matview fato_todos_pdvs]

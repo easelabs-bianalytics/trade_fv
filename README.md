@@ -41,24 +41,28 @@ String de conexão equivalente:
 Schemas de origem (pré-existentes, fora deste projeto):
   estoque_redes.*   cddd.*   tdd.*
 
-trade_fv.analise_estoque_pdv .............. VIEW   (cópia da view estoque_redes.analise_estoque_pdv)
-        │
-        ▼
-trade_fv.fato_cdd_90_dias_agrupada ........ MATVIEW (sell-out 90 dias, por CHAVE_ESTOQUE_CDD)
-        │
-        ▼
-trade_fv.fato_todos_pdvs .................. MATVIEW (1 linha por PDV×SKU: estoque + sell-out + cobertura FV)
-        │
-        ▼
-trade_fv.fato_adequacao_estoque ........... MATVIEW (1 linha por PDV: estoque/sell-out por SKU + regras/sugestão)
-        │
-        ▼
-trade_fv.fato_adequacao_estoque_unpivot ... VIEW   (1 linha por PDV×SKU: unpivot + EAN/Delta/Ajuste)
+estoque_redes.analise_estoque_pdv (fonte externa)   cddd.fato_cdd (fonte externa)
+        │                                                   │
+        │                                                   ▼
+        │                                trade_fv.fato_cdd_90_dias_agrupada ... MATVIEW (sell-out 90 dias)
+        │                                                   │
+        └───────────────────────┬───────────────────────────┘
+                                 ▼
+              trade_fv.fato_todos_pdvs ............. MATVIEW (1 linha por PDV×SKU: estoque + sell-out + cobertura FV)
+                                 │
+                                 ▼
+              trade_fv.fato_adequacao_estoque ...... MATVIEW (1 linha por PDV: estoque/sell-out por SKU + regras/sugestão)
+                                 │
+                                 ▼
+              trade_fv.fato_adequacao_estoque_unpivot ... VIEW (1 linha por PDV×SKU: unpivot + EAN/Delta/Ajuste)
 ```
+
+> **Nota:** existiu uma `trade_fv.analise_estoque_pdv` (cópia da view acima) — foi **removida**
+> por ser redundante. Ver [seção 9, item 7](#9-nuances-conhecidas-para-evitar-falsos-bugs).
 
 **Ordem obrigatória de refresh** (dependências):
 `fato_cdd_90_dias_agrupada` → `fato_todos_pdvs` → `fato_adequacao_estoque`.
-As duas **VIEWs** (`analise_estoque_pdv` e `..._unpivot`) são "ao vivo" e não precisam de refresh.
+A **VIEW** `fato_adequacao_estoque_unpivot` é "ao vivo" e não precisa de refresh.
 
 ### Por que materialized views?
 Recomputar toda a cadeia numa única query (cross-join + múltiplos joins pesados + dupla
@@ -69,15 +73,7 @@ cada nível lê a matview já pronta da camada anterior; o refresh completo leva
 
 ## 3. Objetos do schema `trade_fv`
 
-### 3.1 `analise_estoque_pdv` (VIEW)
-Cópia **idêntica** da view `estoque_redes.analise_estoque_pdv` (universo de PDVs × 4 EANs-alvo,
-com estoque mais recente por rede). Fonte "ao vivo".
-Colunas: `cnpj`, `cnpj_padronizado`, `rede`, `ean`, `desc_apresentacao`, `cat_un_mercado`,
-`cat_desconto_mercado`, `informe_estoque`, `estoque`.
-Origem das tabelas: `estoque_redes.estoque_redes`, `estoque_redes.dim_cnpjs_rede`,
-`estoque_redes.depara_tdd`, `tdd.dim_pdv`, `cddd.apres`.
-
-### 3.2 `fato_cdd_90_dias_agrupada` (MATVIEW)
+### 3.1 `fato_cdd_90_dias_agrupada` (MATVIEW)
 Sell-out (unidades) dos **últimos 90 dias**, agrupado por chave PDV+EAN.
 - **Fonte:** `cddd.fato_cdd` (transações), enriquecida com `cddd.pdvs` (CNPJ) e `cddd.apres` (EAN/descrição).
 - **Filtros:** apenas `cod_tipo_transacao = '1'` (vendas); janela = `[max(cod_anomes) − 91 dias, max(cod_anomes)]`.
@@ -86,9 +82,10 @@ Sell-out (unidades) dos **últimos 90 dias**, agrupado por chave PDV+EAN.
 - **Índice único:** `(CHAVE_ESTOQUE_CDD, DESC_APRESENTACAO)`.
 - **Colunas:** `CHAVE_ESTOQUE_CDD`, `DESC_APRESENTACAO`, `Unidades Total`.
 
-### 3.3 `fato_todos_pdvs` (MATVIEW)
+### 3.2 `fato_todos_pdvs` (MATVIEW)
 Uma linha por **PDV × SKU** com estoque atual, sell-out (via join) e cobertura de força de vendas.
-- **Fonte:** `trade_fv.analise_estoque_pdv` + `trade_fv.fato_cdd_90_dias_agrupada` + cobertura FV.
+- **Fonte:** `estoque_redes.analise_estoque_pdv` (schema de origem, direto — sem cópia
+  intermediária em `trade_fv`) + `trade_fv.fato_cdd_90_dias_agrupada` + cobertura FV.
 - **Limpezas/padronizações (traduzidas do M):**
   - CNPJ: mantém só dígitos; descarta `'0'`, vazio e `'00000000000000'`.
   - Padroniza rede (`DROGARIA DPSP`→`DPSP`, `FARMACIA SAO JOAO`→`SAOJOAO`, `PAGUE MENOS`→`PAGUEMENOS`, `PANVEL FARMACIAS`→`PANVEL`, `RAIA DROGASIL`→`RAIA`).
@@ -102,7 +99,7 @@ Uma linha por **PDV × SKU** com estoque atual, sell-out (via join) e cobertura 
 - **Colunas:** `cnpj_pdv`, `provedor_pdv`, `ean`, `cat_un_mercado`, `estoque`, `apresentacao`,
   `cnpj_pdv_padronizado`, `CHAVE_ESTOQUE_CDD`, `Unidades Total`, `DESC_TERRITORIO`, `COBERTURA FV?`.
 
-### 3.4 `fato_adequacao_estoque` (MATVIEW)
+### 3.3 `fato_adequacao_estoque` (MATVIEW)
 **Coração do modelo.** Uma linha por **PDV** (`GROUP BY cnpj_pdv, cnpj_pdv_padronizado, provedor_pdv`),
 com estoque e sell-out **pivotados por SKU** e todas as regras de sugestão.
 - **Fonte:** `trade_fv.fato_todos_pdvs` (pivot) + `cddd.fato_cdd`/`cddd.pdvs` (para "Última Venda").
@@ -121,7 +118,7 @@ com estoque e sell-out **pivotados por SKU** e todas as regras de sugestão.
 
 Regras detalhadas na [seção 4](#4-regras-de-negócio).
 
-### 3.5 `fato_adequacao_estoque_unpivot` (VIEW)
+### 3.4 `fato_adequacao_estoque_unpivot` (VIEW)
 "Despivota" a `fato_adequacao_estoque`: **4 linhas por PDV** (uma por SKU), formato longo, ideal
 para relatórios de positivação. Lê a matview (rápido) — não precisa refresh.
 - **Colunas:** `CNPJ`, `Rede`, `CAT`, `Ultima Venda (dias)`, `SKU`, `Cobertura FV`, `Status`
@@ -239,7 +236,7 @@ Chaves de junção principais:
 
 | Arquivo | Papel |
 |---|---|
-| `01_views_base.sql` | Cria o schema `trade_fv` e a VIEW `analise_estoque_pdv`. |
+| `01_views_base.sql` | Cria o schema `trade_fv` + as VIEWs iniciais `fato_cdd_90_dias_agrupada` e `fato_todos_pdvs` (passo 1 do deploy do zero — o `02` as converte em MATVIEW logo em seguida; rodar de novo depois disso falha, pois os nomes já são matviews). |
 | `02_deploy_materialized.sql` | (Re)cria as 3 materialized views + índices. **Deploy/rebuild completo — fonte única do matview `fato_adequacao_estoque` (re-executável, `DROP ... CASCADE`); editar aqui, não duplicar o corpo em migrações novas.** |
 | `03_refresh.sql` | `REFRESH` das 3 matviews na ordem correta. **Usado no agendamento.** |
 | `04_unpivot.sql` | Cria/atualiza a VIEW `fato_adequacao_estoque_unpivot`. **Rodar de novo após qualquer rebuild do `02`** (é derrubada pelo `CASCADE`). |
@@ -325,6 +322,14 @@ Comparação contra exports do Power BI (`fato_adequacao` e positivação PAGUEM
 5. **`Status` (PDV) × `Ajuste` (SKU):** granularidades diferentes; podem divergir na mesma linha.
 6. **Memória da instância:** não recomputar toda a cadeia numa única query — usar as matviews
    em camadas (por isso o modelo é materializado).
+7. **`trade_fv.analise_estoque_pdv` foi removida.** Existiu uma cópia idêntica
+   (`CREATE OR REPLACE VIEW`) da `estoque_redes.analise_estoque_pdv` dentro de `trade_fv` —
+   resquício do primeiro rascunho do modelo, antes de `fato_todos_pdvs` passar a ler a
+   origem diretamente. Verificação antes de excluir: contagem igual (39.068 = 39.068),
+   `EXCEPT` nos dois sentidos = 0 (idênticas linha a linha), zero objetos no banco
+   (`pg_depend`) e zero referências no app apontando para ela — já estava órfã. Removida em
+   2026-07-23. Se precisar da view em `trade_fv` de novo por algum motivo, é só recriar
+   com `CREATE VIEW trade_fv.analise_estoque_pdv AS SELECT * FROM estoque_redes.analise_estoque_pdv;`.
 
 ---
 

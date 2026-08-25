@@ -336,27 +336,61 @@
 
     </section>
 
-    <!-- MINHAS SUGESTÕES (representante) -->
+    <!-- MINHAS SUGESTÕES (representante) / INDICAÇÕES DA EQUIPE (GR) -->
     <section class="panel" id="panel-sugestoes">
       <div class="page-head">
         <div>
-          <h1 class="panel-title">Minhas sugestões</h1>
-          <p class="panel-desc">Acompanhe aqui o que você já enviou e em que pé está a análise do time de BI&amp;A.</p>
+          <h1 class="panel-title" id="sugestoesTitulo">Minhas sugestões</h1>
+          <p class="panel-desc" id="sugestoesDesc">Acompanhe aqui o que você já enviou e em que pé está a análise do time de BI&amp;A.</p>
         </div>
         <div class="aprov-stats" id="minhasStats"></div>
       </div>
+
+      <!-- filtros: exclusivos do GR (o rep só tem as próprias, poucas, sugestões) -->
+      <div class="aprov-filtros" id="sugestoesFiltros" style="display:none">
+        <div class="input-group">
+          <label class="input-label" for="fSugRep">Representante</label>
+          <select class="input-field input-select" id="fSugRep"><option value="">Todos</option></select>
+        </div>
+        <div class="input-group">
+          <label class="input-label" for="fSugStatus">Status</label>
+          <select class="input-field input-select" id="fSugStatus">
+            <option value="">Todos</option>
+            <option value="PENDENTE">Em análise</option>
+            <option value="APROVADA">Atendido</option>
+            <option value="RECUSADA">Inviável</option>
+          </select>
+        </div>
+        <div class="input-group">
+          <label class="input-label" for="fSugDataDe">Enviada de</label>
+          <input class="input-field" type="date" id="fSugDataDe">
+        </div>
+        <div class="input-group">
+          <label class="input-label" for="fSugDataAte">até</label>
+          <input class="input-field" type="date" id="fSugDataAte">
+        </div>
+        <div class="input-group" style="justify-content:flex-end">
+          <label class="input-label">&nbsp;</label>
+          <button class="btn btn-secondary" id="btnExportarSugestoes" type="button">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><path d="M12 15V3M7 10l5 5 5-5"/><path d="M4 21h16"/></svg>
+            Exportar Excel
+          </button>
+        </div>
+        <div class="aprov-stats" id="minhasStatsGr"></div>
+      </div>
+
       <div class="table-wrapper">
         <table>
           <thead>
-            <tr><th>Enviada</th><th>PDV</th><th>Cidade</th><th>Rede</th><th>SKU</th><th>Estq. atual</th><th>VB Sugerido BI</th><th>Meu VB</th><th>Und/mês</th><th>Status</th><th>Decisão</th></tr>
+            <tr><th>Enviada</th><th id="thRepresentante" style="display:none">Representante</th><th>PDV</th><th>Cidade</th><th>SKU</th><th>Estq. atual</th><th>VB Sugerido BI</th><th id="thMeuVb">Meu VB</th><th>Und/mês</th><th>Status</th></tr>
           </thead>
           <tbody id="minhasSugestoesBody"></tbody>
         </table>
       </div>
       <div class="empty-state" id="minhasVazio" style="display:none">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/></svg>
-        <strong>Você ainda não enviou nenhuma sugestão</strong>
-        <span>Assim que indicar um PDV, ele aparece aqui com o status da análise.</span>
+        <strong id="minhasVazioTitulo">Você ainda não enviou nenhuma sugestão</strong>
+        <span id="minhasVazioDesc">Assim que indicar um PDV, ele aparece aqui com o status da análise.</span>
         <button class="btn btn-primary" id="btnVaziaNova">Fazer minha primeira sugestão</button>
       </div>
     </section>

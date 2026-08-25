@@ -113,7 +113,7 @@
     String(s || '').toLowerCase().replace(/(^|\s)\S/g, (c) => c.toUpperCase());
 
   // nome do "representante" para exibição (preserva o marcador BI&A)
-  const repDisplay = (r) => (r === 'BI&A' ? 'BI&A' : titleCase(r));
+  const repDisplay = (r) => (r === 'BI&A' || /\(GR\)$/.test(r || '') ? r : titleCase(r));
 
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -260,6 +260,12 @@
   // Itens de navegação por papel. `match` diz quais painéis acendem o item.
   const navItems = () => {
     if (!state.auth) return [];
+    if (state.auth.role === 'gr') {
+      return [
+        { id: 'nova', label: 'Nova indicação', match: [2, 3, 4, 5], onClick: () => irSugerirComoRep() },
+        { id: 'minhas', label: 'Indicações da equipe', match: ['sugestoes'], onClick: () => { goTo('sugestoes'); carregarMinhasSugestoes(); } },
+      ];
+    }
     if (state.auth.role !== 'admin') {
       return [
         { id: 'nova', label: 'Nova sugestão', match: [2, 3, 4, 5], onClick: () => irSugerirComoRep() },
@@ -348,14 +354,17 @@
     if (!logado) return;
 
     const isAdmin = state.auth.role === 'admin';
+    const isGr = state.auth.role === 'gr';
     const nomeExibir = isAdmin && state.rep ? titleCase(state.rep) : state.auth.nome;
-    const papel = isAdmin ? (state.rep ? 'Representante (simulação)' : 'BI&A') : 'Representante';
+    const papel = isAdmin ? (state.rep ? 'Representante (simulação)' : 'BI&A')
+      : isGr ? 'Gerente Regional' : 'Representante';
+    const papelMenu = isAdmin ? 'Administrador' : isGr ? 'Gerente Regional' : 'Representante';
 
     $('#headerUserName').textContent = nomeExibir;
     $('#headerUserRole').textContent = papel;
     $('#headerUserAvatar').textContent = iniciais(nomeExibir || '?');
     $('#menuUserName').textContent = state.auth.nome;
-    $('#menuUserSub').textContent = `${state.auth.usuario} · ${isAdmin ? 'Administrador' : 'Representante'}`;
+    $('#menuUserSub').textContent = `${state.auth.usuario} · ${papelMenu}`;
     // "Trocar representante" só faz sentido para admin simulando
     $('#btnTrocarRep').style.display = isAdmin && state.rep ? '' : 'none';
     renderNav();
@@ -401,10 +410,14 @@
   };
 
   const iniciarSessao = () => {
-    // RLS: o representante entra amarrado ao próprio território
+    // RLS: o representante entra amarrado ao próprio território; o GR entra
+    // com identidade própria (server ignora o que o cliente manda em ambos os
+    // casos — isso só destrava a navegação/contexto no front, ver temCtx).
     if (state.auth.role === 'rep') state.rep = state.auth.territorio;
+    if (state.auth.role === 'gr') state.rep = state.auth.nome;
     atualizarHeader();
     if (state.auth.role === 'admin') carregarReps();
+    if (state.auth.role === 'gr') carregarEquipeGr();
     carregarRedes();
     irParaRota(location.pathname, 'replace');
   };
@@ -933,37 +946,107 @@
   };
 
   // ---------------------------------------------------------- rep: minhas sugestões
-  const carregarMinhasSugestoes = async () => {
-    const body = $('#minhasSugestoesBody');
-    body.innerHTML = '<tr><td colspan="11"><div class="skeleton" style="height:44px"></div></td></tr>';
+  // querystring dos filtros da tela (usada tanto pra listar quanto pra exportar)
+  const filtrosSugestoesQS = () => {
+    const qs = new URLSearchParams();
+    const rep = $('#fSugRep')?.value;
+    const status = $('#fSugStatus')?.value;
+    const de = $('#fSugDataDe')?.value;
+    const ate = $('#fSugDataAte')?.value;
+    if (rep) qs.set('rep', rep);
+    if (status) qs.set('status', status);
+    if (de) qs.set('data_de', de);
+    if (ate) qs.set('data_ate', ate);
+    return qs;
+  };
+
+  const carregarEquipeGr = async () => {
     try {
-      const rows = await api('/api/sugestoes');
+      const equipe = await api('/api/representantes');
+      $('#fSugRep').innerHTML = '<option value="">Toda a equipe</option>' +
+        equipe.map((r) => `<option value="${esc(r.desc_territorio)}">${esc(titleCase(r.desc_territorio))}</option>`).join('');
+    } catch { /* filtro fica só com "Toda a equipe" */ }
+  };
+
+  const carregarMinhasSugestoes = async () => {
+    const isGr = state.auth?.role === 'gr';
+    const colspan = isGr ? 10 : 9;
+
+    // textos e coluna extra variam conforme o papel (GR vê a equipe, não só "minhas")
+    $('#sugestoesTitulo').textContent = isGr ? 'Indicações da equipe' : 'Minhas sugestões';
+    $('#sugestoesDesc').textContent = isGr
+      ? 'Acompanhe aqui o que os representantes da sua equipe enviaram e em que pé está a análise do time de BI&A.'
+      : 'Acompanhe aqui o que você já enviou e em que pé está a análise do time de BI&A.';
+    $('#thRepresentante').style.display = isGr ? '' : 'none';
+    $('#thMeuVb').textContent = isGr ? 'VB Sugerido REP' : 'Meu VB';
+    $('#sugestoesFiltros').style.display = isGr ? '' : 'none';
+    $('#minhasVazioTitulo').textContent = isGr ? 'Nenhuma indicação da sua equipe ainda' : 'Você ainda não enviou nenhuma sugestão';
+    $('#minhasVazioDesc').textContent = isGr
+      ? 'Assim que você ou algum representante da equipe indicar um PDV, ele aparece aqui.'
+      : 'Assim que indicar um PDV, ele aparece aqui com o status da análise.';
+    $('#btnVaziaNova').textContent = isGr ? 'Fazer minha primeira indicação' : 'Fazer minha primeira sugestão';
+
+    const body = $('#minhasSugestoesBody');
+    body.innerHTML = `<tr><td colspan="${colspan}"><div class="skeleton" style="height:44px"></div></td></tr>`;
+    try {
+      const qs = isGr ? filtrosSugestoesQS() : new URLSearchParams();
+      const rows = await api(`/api/sugestoes${qs.toString() ? '?' + qs : ''}`);
       const pend = rows.filter((r) => r.status_aprovacao === 'PENDENTE').length;
       const apr = rows.filter((r) => r.status_aprovacao === 'APROVADA').length;
-      $('#minhasStats').innerHTML = rows.length
+      const statsHtml = rows.length
         ? `<span class="badge badge-gray">${rows.length} ${rows.length === 1 ? 'sugestão' : 'sugestões'}</span>` +
           (pend ? ` <span class="badge badge-warning">${pend} em análise</span>` : '') +
           (apr ? ` <span class="badge badge-green">${apr} aprovada${apr === 1 ? '' : 's'}</span>` : '')
         : '';
+      $('#minhasStats').innerHTML = isGr ? '' : statsHtml;
+      $('#minhasStatsGr').innerHTML = isGr ? statsHtml : '';
       $('#minhasVazio').style.display = rows.length ? 'none' : '';
       $('#panel-sugestoes').querySelector('.table-wrapper').style.display = rows.length ? '' : 'none';
       body.innerHTML = rows.map((r) => `
         <tr>
           <td class="td-num" data-label="Enviada">${fmtData(r.created_at)}</td>
+          ${isGr ? `<td data-label="Representante">${esc(repDisplay(r.representante))}</td>` : ''}
           <td data-label="PDV">${esc(r.rede ? redeLabel(r.rede) : titleCase(r.nome_pdv || ''))}<div class="decidido">${fmtCNPJ(r.cnpj)}</div></td>
           <td data-label="Cidade">${esc(titleCase(r.cidade || '—'))}${r.uf ? '/' + esc(r.uf) : ''}</td>
-          <td data-label="Rede">${esc(r.rede ? redeLabel(r.rede) : '—')}</td>
           <td data-label="SKU">${esc(r.sku)}</td>
           <td class="td-num" data-label="Estq. atual">${r.estoque_atual ?? '—'}</td>
           <td class="td-num" data-label="VB sugerido BI">${r.estoque_ideal ?? '—'}</td>
-          <td class="td-num" data-label="Meu VB"><strong>${esc(r.sugestao_vb)}</strong></td>
+          <td class="td-num" data-label="${isGr ? 'VB Sugerido REP' : 'Meu VB'}"><strong>${esc(r.sugestao_vb)}</strong></td>
           <td class="td-num" data-label="Und / mês">${fmtMedia(r.media_mensal)}</td>
           <td data-label="Status"><span class="badge ${STATUS_SUG_BADGE[r.status_aprovacao] || 'badge-gray'}">${esc(STATUS_SUG_LABEL[r.status_aprovacao] || r.status_aprovacao)}</span></td>
-          <td class="td-num" data-label="Decidida">${r.decidido_em ? fmtData(r.decidido_em) : '—'}</td>
         </tr>
       `).join('');
     } catch (e) {
-      body.innerHTML = `<tr><td colspan="11" style="text-align:center;color:var(--error);padding:28px">${esc(e.message)}</td></tr>`;
+      body.innerHTML = `<tr><td colspan="${colspan}" style="text-align:center;color:var(--error);padding:28px">${esc(e.message)}</td></tr>`;
+    }
+  };
+
+  // download do .xlsx: fetch manual (não pode ser um <a href> simples, pois a
+  // API exige o header X-Auth-Token, que um link comum não envia)
+  const exportarSugestoesExcel = async () => {
+    const btn = $('#btnExportarSugestoes');
+    btn.disabled = true;
+    try {
+      const qs = filtrosSugestoesQS();
+      const res = await fetch(`/api/sugestoes/exportar${qs.toString() ? '?' + qs : ''}`, {
+        headers: state.auth ? { 'X-Auth-Token': state.auth.token } : {},
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || `Erro ${res.status} ao exportar.`);
+      }
+      const blob = await res.blob();
+      const nome = (res.headers.get('Content-Disposition') || '').match(/filename="([^"]+)"/)?.[1]
+        || `indicacoes_${new Date().toISOString().slice(0, 10)}.xlsx`;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = nome;
+      document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      toast(e.message, true);
+    } finally {
+      btn.disabled = false;
     }
   };
 
@@ -1213,6 +1296,11 @@
   });
   $('#fRep').addEventListener('change', carregarAprovacoes);
   $('#fStatus').addEventListener('change', carregarAprovacoes);
+  $('#fSugRep').addEventListener('change', carregarMinhasSugestoes);
+  $('#fSugStatus').addEventListener('change', carregarMinhasSugestoes);
+  $('#fSugDataDe').addEventListener('change', carregarMinhasSugestoes);
+  $('#fSugDataAte').addEventListener('change', carregarMinhasSugestoes);
+  $('#btnExportarSugestoes').addEventListener('click', exportarSugestoesExcel);
 
   $('#repSearch').addEventListener('input', (e) => renderReps(e.target.value));
 

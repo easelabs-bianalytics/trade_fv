@@ -244,6 +244,7 @@ Chaves de junção principais:
 | `06_sugestao_workflow.sql` | Workflow de aprovação (status/decisão em `sugestao_fv`) + VIEW `fato_adequacao_estoque_unpivot_ajustada`. **Rodar de novo após qualquer rebuild do `02`.** |
 | `07_usuarios.sql` | Login individual: VIEW `vw_representantes_ativos` + TABELA `usuario` (ver seção 11). |
 | `08_index_categoria.sql` | Índice de performance em `tdd.fato_tdd` (schema de origem) — acelera a busca de Categoria do PDV de ~5s para ~100ms. |
+| `09_gr.sql` | Role `gr`: `ALTER` no CHECK de `usuario.role` + coluna `cod_gr` + VIEW `vw_gr_territorios` (ver seção 11). |
 
 ### Deploy do zero
 ```bash
@@ -254,6 +255,7 @@ psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f sql/trade_fv/05_sugestao_fv.sql
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f sql/trade_fv/06_sugestao_workflow.sql
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f sql/trade_fv/07_usuarios.sql
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f sql/trade_fv/08_index_categoria.sql
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f sql/trade_fv/09_gr.sql
 ```
 
 ### Alterar a estrutura do matview `fato_adequacao_estoque`
@@ -349,7 +351,8 @@ Comparação contra exports do Power BI (`fato_adequacao` e positivação PAGUEM
 │       ├── 05_sugestao_fv.sql
 │       ├── 06_sugestao_workflow.sql
 │       ├── 07_usuarios.sql
-│       └── 08_index_categoria.sql
+│       ├── 08_index_categoria.sql
+│       └── 09_gr.sql
 ├── app/                       # Sistema web de indicação de PDVs (seção 11)
 │   ├── package.json
 │   ├── server.js              # Express + pg (API + estáticos)
@@ -375,18 +378,36 @@ com **workflow de aprovação pelo BI&A**.
 (**CT ativo** = `data_saida_territorio IS NULL`) ⋈ `cddd.dim_ct` (`nome_abreviado_ct`,
 `email_ct`), excluindo setores vagos / SEM REP e CTs demitidos.
 
-**`trade_fv.usuario`**: admins + representantes. `usuario` = slug do `nome_abreviado_ct`
-(ex.: *Rogério Sudário* → `rogerio_sudario`), `senha_hash` (**scrypt**, nunca texto puro),
-`senha_padrao` (TRUE até o usuário trocar), `ativo`, `cod_ct`/`cod_territorio`/
-`desc_territorio` (identidade das sugestões), `ultimo_login`.
+**`trade_fv.usuario`**: admins + representantes + GRs (`role IN ('admin','rep','gr')`,
+`sql/trade_fv/09_gr.sql`). `usuario` = slug do `nome_abreviado_ct` (ex.: *Rogério
+Sudário* → `rogerio_sudario`), `senha_hash` (**scrypt**, nunca texto puro), `senha_padrao`
+(TRUE até o usuário trocar), `ativo`, `cod_ct`/`cod_territorio`/`desc_territorio`
+(identidade das sugestões do rep), `cod_gr` (identidade do GR), `ultimo_login`.
 
 **Sincronização automática** (boot do app + a cada 6 h + botão do admin):
 novo CT ativo ⇒ usuário criado com a **senha padrão inicial** (`APP_SENHA_PADRAO`,
 default `easelabs@2026`); CT que saiu do território ⇒ usuário **desativado**
 (histórico preservado). Admins fixos criados no seed: `paulo_lima`, `rubens_filho`,
-`natalia_miranda` (mesma senha padrão inicial; todos podem trocá-la no app —
-"Alterar senha", mínimo 8 caracteres — e o admin pode **redefinir** qualquer senha
-de volta à padrão).
+`natalia_miranda`, `fernando_franco` (mesma senha padrão inicial; todos podem trocá-la
+no app — "Alterar senha", mínimo 8 caracteres — e o admin pode **redefinir** qualquer
+senha de volta à padrão).
+
+**GR (Gerente Regional)** — lidera uma equipe de representantes; vê as indicações do
+time e também pode indicar PDVs. Fonte: mesma família SCD já usada para os reps, um
+nível acima — `cddd.dim_gr` (cadastro do GR) ⋈ `cddd.scd_gr_territorio`
+(**vínculo ativo** = `data_fim_gerenciamento IS NULL`), exposta em
+`trade_fv.vw_gr_territorios` (cod_gr, nome_gr, cod_territorio, desc_territorio — já
+com `DISTINCT` e o join para `cddd.forca_vendas`, que tem fan-out por `cod_utc`).
+Hoje **3 GRs cobrem os 29 territórios ativos** (nenhum território ativo fica sem GR):
+Ivan (16), Juliana (13), Gabriel (10) — a soma dá 39 porque nem todo território
+gerenciado tem rep ativo no momento.
+`cddd.dim_gr` **não tem e-mail** (diferente de `dim_ct`) — testado um cruzamento com
+`rh_analise_desempenho.hierarquia` (líder→liderado por e-mail) para preencher isso
+automaticamente, mas essa tabela não reflete a estrutura de território atual (só 1 dos
+3 GRs aparecia lá, e nem batia com nossos reps ativos) — **descartada**. Por isso os
+GRs são cadastrados manualmente em `GRS_SEED` (`app/server.js`, mesmo padrão do
+`ADMINS_SEED`): `{ cod_gr, email }`, com `usuario`/`nome` **derivados do e-mail**
+(`ivan.junior@easelabs.com.br` → usuário `ivan_junior`, nome "Ivan Junior").
 
 **Tela "Alterar minha senha"**: os três campos têm botão de **exibir/ocultar caracteres**
 (ícone de olho, `aria-pressed` + `aria-label` alternados). Digitar uma senha nova às cegas
@@ -403,14 +424,58 @@ token expirável, SMTP Office 365) foi avaliado e **adiado** — a coluna
 `trade_fv.usuario.email` já está populada para os 32 reps ativos caso venha a ser feito.
 
 **RLS aplicado no servidor** (sessão HMAC de 12 h em `X-Auth-Token`, payload com
-uid/role/território):
+uid/role/território/`cod_gr`):
 - Rep **entra direto no próprio território** (sem etapa de escolha) — o corpo da
   requisição não consegue registrar sugestão em nome de outro representante.
 - Rep lista apenas as próprias sugestões; `all=1`, aprovações, usuários e a lista de
   representantes são admin-only.
+- **GR** enxerga as sugestões de **toda a própria equipe** (territórios resolvidos a
+  cada requisição via `trade_fv.vw_gr_territorios WHERE cod_gr = <sessão>` — nunca a
+  partir de algo que o cliente mande) **+ as que ele mesmo enviou**. Pode filtrar por
+  um representante específico do time via `?rep=`, mas um valor fora da equipe é
+  **ignorado silenciosamente** (cai de volta no filtro do time inteiro — nunca vaza
+  para fora do escopo, mesmo sob requisição manipulada). Ao indicar um PDV, a sugestão
+  entra com `"Representante" = "<Nome> (GR)"` (identidade própria, não pode se passar
+  por um rep do time) e status **PENDENTE**, no mesmo fluxo de aprovação dos reps —
+  **GR não aprova nem recusa** (`PATCH /api/sugestoes/:id` continua `admin`-only).
 - Admin pode simular o fluxo de qualquer representante (etapa 1 só existe para admin).
+  Dashboard, Aprovações e Usuários continuam admin-only (GR não tem Painel).
 *Futuro:* fluxo de e-mail (verificação/reset via SMTP, como no app de eventos) pode ser
-plugado depois — a coluna `email` já vem do `dim_ct`.
+plugado depois — a coluna `email` já vem do `dim_ct` (reps) / `GRS_SEED` (GRs).
+
+**Tela "Indicações da equipe" (GR)** — a mesma tabela de "Minhas sugestões" do rep,
+com filtros exclusivos do GR (`#sugestoesFiltros`, ocultos para rep): representante
+(dropdown escopado à equipe, via `/api/representantes` agora também liberado pro
+papel `gr`), status e um intervalo de data de envio (`data_de`/`data_ate`). As
+colunas **Rede** e **Decisão** foram removidas da tabela (Rede duplicava o que já
+aparece na coluna PDV quando a apresentação é feita pelo nome da rede; Decisão só
+trazia a data, sem valor além do que o badge de Status já mostra) — `VB Sugerido BI`
+mantém o nome; "Meu VB" vira **"VB Sugerido REP"** só na visão do GR (para o rep
+continua "Meu VB", é o dele mesmo).
+
+**Exportar Excel** (`GET /api/sugestoes/exportar`, `exceljs`) — respeita os mesmos
+filtros da tela (reaproveita `montarFiltroSugestoes`, a mesma função de RLS/filtro
+usada por `GET /api/sugestoes`, para nunca deixar a exportação divergir da tela ou
+vazar fora do escopo do GR). Colunas (13): Enviada, Representante, PDV, CNPJ,
+Cidade, UF, Rede, SKU, Estoque Atual, VB Sugerido BI, VB Sugerido REP, Und/mês,
+Status — traz `Rede` de volta (não aparece na tabela on-screen, mas tem valor
+filtrar/dinamizar por rede no Excel); `Decidido por`/`Decidida em` ficam de fora,
+a pedido, tanto da tela quanto do arquivo. Formatação: cabeçalho em negrito com a
+cor de marca (`--primary-600`), linhas zebradas, célula de Status colorida na
+mesma paleta dos badges da tela, CNPJ formatado, datas em `dd/mm/aaaa hh:mm`,
+cabeçalho congelado e autofiltro (`A1:M1`). Download via `fetch` + Blob (não um
+`<a href>` simples) porque a rota exige o header `X-Auth-Token`, que um link
+comum não envia.
+
+**Filtro de data (`data_de`/`data_ate`) em fuso de Brasília** — a coluna
+`created_at` é `timestamptz` e o banco roda em `Etc/UTC`, mas a tela mostra/pensa
+a data no fuso do navegador (`fmtData` → `toLocaleDateString('pt-BR')`, sem
+`timeZone` explícito). Sem ajuste, uma sugestão enviada de madrugada em Brasília
+(ex.: 21h30 de 10/08 = 00h30 UTC de 11/08) passava no filtro "de 11/08" mas a
+tela continuava mostrando "10/08" naquela linha — parecia filtro quebrado. Corrigido
+comparando o limite do filtro já convertido para `America/Sao_Paulo`
+(`$N::date::timestamp AT TIME ZONE 'America/Sao_Paulo'`), a mesma referência que
+a tela usa.
 
 ### Navegação (SPA com rotas)
 `/login`, `/representante`, `/sugerir`, `/sugerir/validar`, `/sugerir/vb`,
@@ -830,19 +895,20 @@ adicionais. É esta view que o downstream deve consumir como "sugestão oficial"
 ### API (Express)
 | Rota | Auth | Descrição |
 |---|---|---|
-| `POST /api/login` | — | `{usuario, senha}` → `{token, role, nome, territorio, senha_padrao}`. |
+| `POST /api/login` | — | `{usuario, senha}` → `{token, role, nome, territorio, cod_gr, senha_padrao}`. |
 | `POST /api/senha` | login | Troca a própria senha (`{senha_atual, senha_nova}`). |
 | `GET /api/usuarios` | admin | Lista usuários (papel, território, ativo, senha padrão, último login). |
 | `POST /api/usuarios/:id/reset-senha` | admin | Redefine a senha do usuário para a padrão. |
 | `POST /api/usuarios/sync` | admin | Roda a sincronização de representantes agora. |
-| `GET /api/representantes` | admin | Territórios válidos (simulação do fluxo do representante). |
+| `GET /api/representantes` | admin, gr | Territórios válidos. Admin: todos (simulação do fluxo). GR: só a própria equipe (filtro da tela "Indicações da equipe"). |
 | `GET /api/redes` | login | Redes da base de adequação (cadastro manual). |
 | `GET /api/dashboard` | admin | KPIs do painel (pendentes, aprovadas no mês, reps ativos, PDVs). |
 | `POST /api/recomendacao` | login | `{cnpj, ean}` → recomendação de VB pela IA (ver seção própria). |
 | `GET /api/pdvs?q=` | login | Busca de PDVs (base de adequação) com rede e categoria. Acento-insensível, multi-token, ranqueada por cidade/bairro/rede, `LIMIT 25`. |
-| `GET /api/pdv/:cnpj` | login | Dados + categoria + adequação (com `media_mensal`) + território. Sugestões existentes só vêm para `role=admin`. |
-| `POST /api/sugestoes` | login | Insere sugestão (snapshot). `{modo:'bia'}` (admin) grava já aprovada como `'BI&A'`. **409** se já houver PENDENTE do rep p/ CNPJ × SKU (não se aplica ao modo BI&A). |
-| `GET /api/sugestoes?rep=` \| `?cnpj=` \| `?all=1[&rep=&status=]` | admin | Histórico de sugestões (com `media_mensal`) — **exclusivo do admin**; reps recebem `[]`. |
+| `GET /api/pdv/:cnpj` | login | Dados + categoria + adequação (com `media_mensal`) + território. Sugestões existentes: `admin` vê tudo; `gr` vê a própria equipe + as que ele mesmo enviou; `rep` recebe `[]`. |
+| `POST /api/sugestoes` | login | Insere sugestão (snapshot). `{modo:'bia'}` (admin) grava já aprovada como `'BI&A'`. `role=gr` grava com `"Representante" = "<Nome> (GR)"`, status PENDENTE (não aprova a própria). **409** se já houver PENDENTE do mesmo autor p/ CNPJ × SKU (não se aplica ao modo BI&A). |
+| `GET /api/sugestoes?rep=` \| `?cnpj=` \| `?all=1[&rep=&status=&data_de=&data_ate=]` | admin | Histórico completo (com `media_mensal`) — exclusivo do admin; reps recebem `[]`. **GR** usa a mesma rota (sem `all=`, que é exclusivo do admin): sempre escopado à própria equipe (+ próprias sugestões); `?rep=&status=&data_de=&data_ate=` disponíveis; `?rep=` fora do time é ignorado. |
+| `GET /api/sugestoes/exportar` | admin, gr | Mesmos filtros de `GET /api/sugestoes` acima → `.xlsx` formatado (`exceljs`, ver seção "Indicações da equipe"). **400** se nenhum filtro for informado (admin). |
 | `PATCH /api/sugestoes/:id` | admin | `{acao: APROVADA\|RECUSADA}` → decide pendente. |
 
 ### Rodar local

@@ -1441,6 +1441,19 @@ tbody tr:nth-child(even) > td { background: rgba(247, 248, 250, 0.55); }
 @media (hover: hover) { tbody tr:hover > td { background: var(--primary-50); } }
 tbody tr:last-child td { border-bottom: none; }
 
+/* "Indicações da equipe" (GR) ganhou a coluna Representante além das demais —
+   com todos os cabeçalhos em nowrap (padrão acima) a soma passava da largura
+   da tela e forçava scroll horizontal. Aqui, só nesta tabela: cabeçalho pode
+   quebrar em 2 linhas (encolhe a coluna pro tamanho do DADO, não do rótulo) e
+   o padding é mais enxuto. Não mexe nas outras tabelas (Aprovações/Usuários),
+   que já cabem sem scroll. */
+#panel-sugestoes th {
+  white-space: normal;
+  line-height: 1.25;
+  padding: 8px 10px;
+}
+#panel-sugestoes td { padding: 9px 10px; }
+
 /* ── Estado vazio ── */
 .empty-state {
   display: flex; flex-direction: column; align-items: center;

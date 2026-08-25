@@ -9,6 +9,7 @@ const express = require('express');
 const crypto = require('crypto');
 const path = require('path');
 const { Pool } = require('pg');
+const ExcelJS = require('exceljs');
 
 const pool = new Pool(
   process.env.DATABASE_URL
@@ -35,6 +36,24 @@ const SENHA_PADRAO = process.env.APP_SENHA_PADRAO || 'easelabs@2026';
 const SESSAO_HORAS = 12;
 const ADMINS_SEED = ['paulo_lima', 'rubens_filho', 'natalia_miranda', 'fernando_franco'];
 
+// GRs (Gerentes Regionais): cddd.dim_gr não tem coluna de e-mail, então — ao
+// contrário dos reps (sincronizados via vw_representantes_ativos) — são
+// cadastrados aqui manualmente. cod_gr vem de cddd.dim_gr; usuario/nome são
+// derivados do próprio e-mail (mesmo padrão dos admins: fernando.franco@... →
+// usuario "fernando_franco", nome "Fernando Franco").
+const GRS_SEED = [
+  { cod_gr: 9015, email: 'ivan.junior@easelabs.com.br' },
+  { cod_gr: 9020, email: 'juliana.goularte@easelabs.com.br' },
+  { cod_gr: 9018, email: 'gabriel.bastos@easelabs.com.br' },
+];
+
+const identidadeDoEmail = (email) => {
+  const local = String(email).split('@')[0];
+  const usuario = local.toLowerCase().replace(/[^a-z0-9.]+/g, '').replace(/\./g, '_');
+  const nome = local.split('.').map((p) => (p ? p[0].toUpperCase() + p.slice(1) : p)).join(' ');
+  return { usuario, nome };
+};
+
 const hashSenha = (senha) => {
   const salt = crypto.randomBytes(16).toString('hex');
   const hash = crypto.scryptSync(senha, salt, 64).toString('hex');
@@ -58,6 +77,7 @@ const assinarSessao = (u) => {
     role: u.role,
     nome: u.nome,
     territorio: u.desc_territorio || null,
+    cod_gr: u.cod_gr || null,
     exp: Date.now() + SESSAO_HORAS * 3600 * 1000,
   }));
   const sig = crypto.createHmac('sha256', AUTH_SECRET).update(payload).digest('hex');
@@ -116,6 +136,17 @@ const sincronizarUsuarios = async () => {
     if (r.rows.length) resumo.criados.push(adm);
   }
 
+  for (const gr of GRS_SEED) {
+    const { usuario, nome } = identidadeDoEmail(gr.email);
+    const r = await pool.query(`
+      INSERT INTO trade_fv.usuario (usuario, nome, email, role, cod_gr, senha_hash, senha_padrao)
+      VALUES ($1, $2, $3, 'gr', $4, $5, TRUE)
+      ON CONFLICT (usuario) DO NOTHING
+      RETURNING usuario
+    `, [usuario, nome, gr.email, gr.cod_gr, hashSenha(SENHA_PADRAO)]);
+    if (r.rows.length) resumo.criados.push(usuario);
+  }
+
   const { rows: reps } = await pool.query('SELECT * FROM trade_fv.vw_representantes_ativos');
   for (const rep of reps) {
     const usuario = slugUsuario(rep.nome_abreviado_ct);
@@ -157,6 +188,17 @@ const sincronizarUsuarios = async () => {
   return resumo;
 };
 
+// Territórios (desc_territorio) atualmente sob um GR — via trade_fv.vw_gr_territorios
+// (janela ativa da SCD cddd.scd_gr_territorio). Usado para escopar tudo que um
+// GR pode ver/filtrar: nunca confiar em filtros vindos do cliente para isso.
+const territoriosDoGr = async (codGr) => {
+  const { rows } = await pool.query(`
+    SELECT DISTINCT desc_territorio FROM trade_fv.vw_gr_territorios
+    WHERE cod_gr = $1 AND desc_territorio IS NOT NULL
+  `, [codGr]);
+  return rows.map((r) => r.desc_territorio);
+};
+
 app.post('/api/login', asyncRoute(async (req, res) => {
   const usuario = String(req.body?.usuario || '').toLowerCase().trim();
   const senha = String(req.body?.senha || '');
@@ -178,6 +220,7 @@ app.post('/api/login', asyncRoute(async (req, res) => {
     nome: u.nome,
     usuario: u.usuario,
     territorio: u.desc_territorio || null,
+    cod_gr: u.cod_gr || null,
     senha_padrao: u.senha_padrao,
   });
 }));
@@ -204,7 +247,7 @@ app.post('/api/senha', auth(), asyncRoute(async (req, res) => {
 // administração de usuários
 app.get('/api/usuarios', auth(['admin']), asyncRoute(async (_req, res) => {
   const { rows } = await pool.query(`
-    SELECT id, usuario, nome, email, role, desc_territorio, ativo, senha_padrao, ultimo_login
+    SELECT id, usuario, nome, email, role, cod_gr, desc_territorio, ativo, senha_padrao, ultimo_login
     FROM trade_fv.usuario
     ORDER BY role, usuario
   `);
@@ -240,9 +283,13 @@ const SQL_CATEGORIA_LATERAL = `
   ) cat ON TRUE`;
 
 // ----------------------------------------------------------------------------
-// GET /api/representantes — territórios válidos (admin: simulação do fluxo)
+// GET /api/representantes — territórios válidos
+//   admin: todos (simulação do fluxo) | gr: só a própria equipe (filtro da tela
+//   "Indicações da equipe")
 // ----------------------------------------------------------------------------
-app.get('/api/representantes', auth(['admin']), asyncRoute(async (_req, res) => {
+app.get('/api/representantes', auth(['admin', 'gr']), asyncRoute(async (req, res) => {
+  const isGr = req.role === 'gr';
+  const team = isGr ? await territoriosDoGr(req.sessao.cod_gr) : null;
   const { rows } = await pool.query(`
     SELECT fv.desc_territorio,
            COUNT(DISTINCT p."CNPJ_PDV") AS qtd_pdvs
@@ -250,9 +297,10 @@ app.get('/api/representantes', auth(['admin']), asyncRoute(async (_req, res) => 
     LEFT JOIN tdd.dim_pdv p ON p."UTC_PDV" = fv.cod_utc
     WHERE fv.desc_territorio IS NOT NULL
       AND fv.desc_territorio <> 'SEM REP'
+      ${isGr ? 'AND fv.desc_territorio = ANY($1::text[])' : ''}
     GROUP BY fv.desc_territorio
     ORDER BY fv.desc_territorio
-  `);
+  `, isGr ? [team] : []);
   res.json(rows);
 }));
 
@@ -376,6 +424,10 @@ app.get('/api/pdv/:cnpj', auth(), asyncRoute(async (req, res) => {
   const cnpj = req.params.cnpj.replace(/\D/g, '');
   if (!cnpj) return res.status(400).json({ error: 'CNPJ inválido' });
 
+  const isGr = req.role === 'gr';
+  const grTag = isGr ? `${req.sessao.nome} (GR)` : null;
+  const teamTerritorios = isGr ? await territoriosDoGr(req.sessao.cod_gr) : [];
+
   const [pdv, adequacao, sugestoes, territorio] = await Promise.all([
     pool.query(`
       SELECT p."CNPJ_PDV" AS cnpj, p."DESC_PDV" AS nome, p."ENDERECO_PDV" AS endereco,
@@ -401,7 +453,8 @@ app.get('/api/pdv/:cnpj', auth(), asyncRoute(async (req, res) => {
         WHEN 'Isolado 30 mL' THEN 1 WHEN 'Isolado 10 mL' THEN 2
         WHEN 'Isolado 20 mg 30 mL' THEN 3 WHEN 'Extrato' THEN 4 END
     `, [cnpj]),
-    // sugestões existentes: exclusivas ao admin/BI&A (o rep não vê histórico)
+    // sugestões existentes: admin vê tudo; GR vê as da própria equipe (+ as que
+    // ele mesmo enviou); rep não vê histórico (nem o próprio)
     req.role === 'admin' ? pool.query(`
       SELECT "EAN" AS ean, "SKU" AS sku, "Sugestao VB" AS sugestao_vb,
              "Representante" AS representante, status_aprovacao,
@@ -409,7 +462,14 @@ app.get('/api/pdv/:cnpj', auth(), asyncRoute(async (req, res) => {
       FROM trade_fv.sugestao_fv
       WHERE "CNPJ" = $1
       ORDER BY created_at DESC
-    `, [cnpj]) : { rows: [] },
+    `, [cnpj]) : isGr ? pool.query(`
+      SELECT "EAN" AS ean, "SKU" AS sku, "Sugestao VB" AS sugestao_vb,
+             "Representante" AS representante, status_aprovacao,
+             created_at, decidido_em
+      FROM trade_fv.sugestao_fv
+      WHERE "CNPJ" = $1 AND ("Representante" = ANY($2::text[]) OR "Representante" = $3)
+      ORDER BY created_at DESC
+    `, [cnpj, teamTerritorios, grTag]) : { rows: [] },
     pool.query(`
       SELECT DISTINCT fv.desc_territorio
       FROM tdd.dim_pdv p
@@ -686,10 +746,13 @@ app.post('/api/sugestoes', auth(), asyncRoute(async (req, res) => {
 
   // Modo BI&A (admin): a alteração de VB entra já APROVADA na sugestão oficial.
   const modoBia = req.role === 'admin' && req.body?.modo === 'bia';
-  // RLS: rep sempre registra no próprio território; admin informa qual simula
+  // RLS: rep sempre registra no próprio território; GR registra com identidade
+  // própria (não pode se passar por um rep do time); admin informa qual simula.
   const representante = modoBia
     ? 'BI&A'
-    : (req.role === 'rep' ? req.sessao.territorio : (req.body?.representante || '').trim());
+    : req.role === 'rep' ? req.sessao.territorio
+    : req.role === 'gr' ? `${req.sessao.nome} (GR)`
+    : (req.body?.representante || '').trim();
 
   if (!cnpjNum || !SKU_POR_EAN[ean] || !representante || !Number.isInteger(vb) || vb < 0) {
     return res.status(400).json({ error: 'Dados inválidos: informe CNPJ, EAN, representante e um VB inteiro ≥ 0.' });
@@ -771,43 +834,181 @@ app.post('/api/sugestoes', auth(), asyncRoute(async (req, res) => {
 }));
 
 // ----------------------------------------------------------------------------
-// GET /api/sugestoes — ?rep= | ?cnpj= | (admin) ?all=1[&rep=&status=]
+// Filtros de GET /api/sugestoes e GET /api/sugestoes/exportar — MESMA regra de
+// RLS e de filtros nos dois lugares (nunca duplicar/deixar divergir a lógica).
+//   admin: ?rep= | ?cnpj= | ?all=1[&rep=&status=&data_de=&data_ate=]
+//   gr:    [&rep=&cnpj=&status=&data_de=&data_ate=] — sempre escopado à equipe
+//   rep:   sempre as próprias (sem filtros livres)
 // ----------------------------------------------------------------------------
-app.get('/api/sugestoes', auth(), asyncRoute(async (req, res) => {
+const montarFiltroSugestoes = async (req) => {
   const isAdmin = req.role === 'admin';
-  // RLS: o representante só enxerga as PRÓPRIAS sugestões (nunca as de terceiros,
-  // nem por CNPJ). Os filtros livres são exclusivos do admin/BI&A.
-  const rep = isAdmin ? (req.query.rep || '').trim() : (req.sessao.territorio || '');
-  const cnpj = isAdmin ? (req.query.cnpj || '').replace(/\D/g, '') : '';
+  const isGr = req.role === 'gr';
+
+  const teamTerritorios = isGr ? await territoriosDoGr(req.sessao.cod_gr) : [];
+  const grTag = isGr ? `${req.sessao.nome} (GR)` : null;
+  const repFiltroGr = isGr ? (req.query.rep || '').trim() : '';
+
+  const rep = isAdmin ? (req.query.rep || '').trim() : (isGr ? '' : (req.sessao.territorio || ''));
+  const cnpj = (isAdmin || isGr) ? (req.query.cnpj || '').replace(/\D/g, '') : '';
   const all = isAdmin && req.query.all === '1';
-  const status = isAdmin ? (req.query.status || '').trim().toUpperCase() : '';
-  if (!all && !rep && !cnpj) return res.json([]);
+  const status = (isAdmin || isGr) ? (req.query.status || '').trim().toUpperCase() : '';
+  const dataRe = /^\d{4}-\d{2}-\d{2}$/;
+  const dataDe = (isAdmin || isGr) && dataRe.test(req.query.data_de || '') ? req.query.data_de : '';
+  const dataAte = (isAdmin || isGr) && dataRe.test(req.query.data_ate || '') ? req.query.data_ate : '';
+
+  const semFiltro = !all && !rep && !cnpj && !isGr;
 
   const where = [];
   const params = [];
   if (rep) { params.push(rep); where.push(`s."Representante" = $${params.length}`); }
+  if (isGr) {
+    if (repFiltroGr && teamTerritorios.includes(repFiltroGr)) {
+      params.push(repFiltroGr); where.push(`s."Representante" = $${params.length}`);
+    } else {
+      params.push([...teamTerritorios, grTag]);
+      where.push(`s."Representante" = ANY($${params.length}::text[])`);
+    }
+  }
   if (cnpj) { params.push(cnpj); where.push(`s."CNPJ" = $${params.length}`); }
   if (['PENDENTE', 'APROVADA', 'RECUSADA'].includes(status)) {
     params.push(status); where.push(`s.status_aprovacao = $${params.length}`);
   }
+  // O banco roda em UTC, mas a tela mostra/pensa a data em horário de Brasília
+  // (fmtData usa o fuso do navegador). Sem isso, uma sugestão enviada de
+  // madrugada (ex.: 23h de Brasília = já é o dia seguinte em UTC) passava no
+  // filtro de um dia que a tela nunca mostrou para aquela linha.
+  if (dataDe) { params.push(dataDe); where.push(`s.created_at >= ($${params.length}::date::timestamp AT TIME ZONE 'America/Sao_Paulo')`); }
+  if (dataAte) { params.push(dataAte); where.push(`s.created_at < (($${params.length}::date + 1)::timestamp AT TIME ZONE 'America/Sao_Paulo')`); }
+
+  return { where, params, semFiltro };
+};
+
+const SQL_SUGESTOES_SELECT = `
+  SELECT s.id, s."CNPJ" AS cnpj, p."DESC_PDV" AS nome_pdv, p."CIDADE_PDV" AS cidade,
+         p."UF_PDV" AS uf, s."Rede" AS rede, s."SKU" AS sku, s."EAN" AS ean,
+         s."Ajuste" AS ajuste, s."Estoque Atual" AS estoque_atual,
+         s."Estoque Ideal" AS estoque_ideal, s."Sugestao VB" AS sugestao_vb,
+         uni."Média Mensal" AS media_mensal,
+         s."Representante" AS representante, s.status_aprovacao,
+         s.created_at, s.decidido_por, s.decidido_em
+  FROM trade_fv.sugestao_fv s
+  LEFT JOIN tdd.dim_pdv p ON p."CNPJ_PDV" = s."CNPJ"
+  LEFT JOIN trade_fv.fato_adequacao_estoque_unpivot uni
+         ON uni."CNPJ" = s."CNPJ" AND uni."EAN" = s."EAN"`;
+
+app.get('/api/sugestoes', auth(), asyncRoute(async (req, res) => {
+  const { where, params, semFiltro } = await montarFiltroSugestoes(req);
+  if (semFiltro) return res.json([]);
 
   const { rows } = await pool.query(`
-    SELECT s.id, s."CNPJ" AS cnpj, p."DESC_PDV" AS nome_pdv, p."CIDADE_PDV" AS cidade,
-           p."UF_PDV" AS uf, s."Rede" AS rede, s."SKU" AS sku, s."EAN" AS ean,
-           s."Ajuste" AS ajuste, s."Estoque Atual" AS estoque_atual,
-           s."Estoque Ideal" AS estoque_ideal, s."Sugestao VB" AS sugestao_vb,
-           uni."Média Mensal" AS media_mensal,
-           s."Representante" AS representante, s.status_aprovacao,
-           s.created_at, s.decidido_por, s.decidido_em
-    FROM trade_fv.sugestao_fv s
-    LEFT JOIN tdd.dim_pdv p ON p."CNPJ_PDV" = s."CNPJ"
-    LEFT JOIN trade_fv.fato_adequacao_estoque_unpivot uni
-           ON uni."CNPJ" = s."CNPJ" AND uni."EAN" = s."EAN"
+    ${SQL_SUGESTOES_SELECT}
     ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
     ORDER BY s.created_at DESC
     LIMIT 500
   `, params);
   res.json(rows);
+}));
+
+// ----------------------------------------------------------------------------
+// GET /api/sugestoes/exportar — .xlsx formatado, respeitando os MESMOS filtros
+// de GET /api/sugestoes (rep=/cnpj=/status=/data_de=/data_ate=[&all=1, admin]).
+// ----------------------------------------------------------------------------
+const STATUS_LABEL_SRV = { PENDENTE: 'Em análise', APROVADA: 'Atendido', RECUSADA: 'Inviável' };
+const STATUS_FILL_SRV = { PENDENTE: 'FFFFF3CD', APROVADA: 'FFD4F4DD', RECUSADA: 'FFFDE0E0' };
+
+const formatarCnpjSrv = (c) => {
+  const d = String(c || '').padStart(14, '0');
+  return d.length === 14 ? `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5, 8)}/${d.slice(8, 12)}-${d.slice(12)}` : c;
+};
+
+app.get('/api/sugestoes/exportar', auth(['admin', 'gr']), asyncRoute(async (req, res) => {
+  const { where, params, semFiltro } = await montarFiltroSugestoes(req);
+  if (semFiltro) return res.status(400).json({ error: 'Informe ao menos um filtro para exportar.' });
+
+  const { rows } = await pool.query(`
+    ${SQL_SUGESTOES_SELECT}
+    ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
+    ORDER BY s.created_at DESC
+    LIMIT 5000
+  `, params);
+
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'Ease Labs — Indicação de PDVs';
+  wb.created = new Date();
+  const ws = wb.addWorksheet('Indicações', {
+    views: [{ state: 'frozen', ySplit: 1 }],
+    pageSetup: { orientation: 'landscape', fitToPage: true, fitToWidth: 1 },
+  });
+
+  ws.columns = [
+    { header: 'Enviada', key: 'enviada', width: 16 },
+    { header: 'Representante', key: 'rep', width: 26 },
+    { header: 'PDV', key: 'pdv', width: 32 },
+    { header: 'CNPJ', key: 'cnpj', width: 20 },
+    { header: 'Cidade', key: 'cidade', width: 22 },
+    { header: 'UF', key: 'uf', width: 6 },
+    { header: 'Rede', key: 'rede', width: 16 },
+    { header: 'SKU', key: 'sku', width: 20 },
+    { header: 'Estoque Atual', key: 'estoque', width: 14 },
+    { header: 'VB Sugerido BI', key: 'vb_bi', width: 15 },
+    { header: 'VB Sugerido REP', key: 'vb_rep', width: 16 },
+    { header: 'Und/mês', key: 'media', width: 12 },
+    { header: 'Status', key: 'status', width: 14 },
+  ];
+
+  rows.forEach((r) => {
+    ws.addRow({
+      enviada: r.created_at ? new Date(r.created_at) : null,
+      rep: r.representante,
+      pdv: r.nome_pdv || '',
+      cnpj: formatarCnpjSrv(r.cnpj),
+      cidade: r.cidade || '',
+      uf: r.uf || '',
+      rede: REDE_LABEL_SRV[r.rede] || r.rede || '',
+      sku: r.sku,
+      estoque: r.estoque_atual != null ? Number(r.estoque_atual) : null,
+      vb_bi: r.estoque_ideal != null ? Number(r.estoque_ideal) : null,
+      vb_rep: Number(r.sugestao_vb),
+      media: r.media_mensal != null ? Number(r.media_mensal) : null,
+      status: STATUS_LABEL_SRV[r.status_aprovacao] || r.status_aprovacao,
+    });
+  });
+
+  ws.getColumn('enviada').numFmt = 'dd/mm/yyyy hh:mm';
+  ['estoque', 'vb_bi', 'vb_rep'].forEach((k) => { ws.getColumn(k).numFmt = '0'; });
+  ws.getColumn('media').numFmt = '0.0';
+
+  // cabeçalho: fundo roxo da marca (--primary-600), texto branco, negrito
+  const header = ws.getRow(1);
+  header.height = 22;
+  header.eachCell((cell) => {
+    cell.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 11 };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF5558D4' } };
+    cell.alignment = { vertical: 'middle', horizontal: 'center' };
+  });
+
+  // zebra striping + status colorido (mesma paleta dos badges da tela)
+  rows.forEach((r, i) => {
+    const row = ws.getRow(i + 2);
+    const zebra = i % 2 === 1 ? 'FFF7F8FA' : 'FFFFFFFF';
+    row.eachCell({ includeEmpty: true }, (cell) => {
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: zebra } };
+      cell.border = { bottom: { style: 'hair', color: { argb: 'FFE5E7EB' } } };
+      cell.alignment = { vertical: 'middle' };
+    });
+    const statusCell = row.getCell('status');
+    statusCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: STATUS_FILL_SRV[r.status_aprovacao] || zebra } };
+    statusCell.font = { bold: true };
+    statusCell.alignment = { vertical: 'middle', horizontal: 'center' };
+  });
+
+  ws.autoFilter = { from: 'A1', to: 'M1' };
+
+  const nomeArquivo = `indicacoes_${new Date().toISOString().slice(0, 10)}.xlsx`;
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', `attachment; filename="${nomeArquivo}"`);
+  await wb.xlsx.write(res);
+  res.end();
 }));
 
 // ----------------------------------------------------------------------------

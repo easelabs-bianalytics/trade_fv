@@ -245,6 +245,7 @@ Chaves de junção principais:
 | `07_usuarios.sql` | Login individual: VIEW `vw_representantes_ativos` + TABELA `usuario` (ver seção 11). |
 | `08_index_categoria.sql` | Índice de performance em `tdd.fato_tdd` (schema de origem) — acelera a busca de Categoria do PDV de ~5s para ~100ms. |
 | `09_gr.sql` | Role `gr`: `ALTER` no CHECK de `usuario.role` + coluna `cod_gr` + VIEW `vw_gr_territorios` (ver seção 11). |
+| `10_ajustada_pivot.sql` | VIEW `fato_adequacao_estoque_ajustada` — mesma forma larga (1 linha/PDV) de `fato_adequacao_estoque`, com o VB aprovado do rep sobrescrevendo os 5 campos `Estoque Ideal Final *`. Feita pro **Power BI apontar direto aqui** e abandonar o DAX/M que recalcula tudo (ver seção 12). |
 
 ### Deploy do zero
 ```bash
@@ -256,6 +257,7 @@ psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f sql/trade_fv/06_sugestao_workflow.sql
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f sql/trade_fv/07_usuarios.sql
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f sql/trade_fv/08_index_categoria.sql
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f sql/trade_fv/09_gr.sql
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f sql/trade_fv/10_ajustada_pivot.sql
 ```
 
 ### Alterar a estrutura do matview `fato_adequacao_estoque`
@@ -352,7 +354,8 @@ Comparação contra exports do Power BI (`fato_adequacao` e positivação PAGUEM
 │       ├── 06_sugestao_workflow.sql
 │       ├── 07_usuarios.sql
 │       ├── 08_index_categoria.sql
-│       └── 09_gr.sql
+│       ├── 09_gr.sql
+│       └── 10_ajustada_pivot.sql
 ├── app/                       # Sistema web de indicação de PDVs (seção 11)
 │   ├── package.json
 │   ├── server.js              # Express + pg (API + estáticos)
@@ -927,3 +930,63 @@ cd app && npm install && npm start
 Criar um serviço apontando para o repositório com **Root Directory = `app`** (Nixpacks
 detecta o `package.json`; start = `npm start`) e a variável `DATABASE_URL` referenciando
 o Postgres do projeto. O servidor usa `PORT` do ambiente automaticamente.
+
+---
+
+## 12. Integração Power BI — `fato_adequacao_estoque_ajustada`
+
+**Situação anterior:** o dashboard que o KAM usa para exportar `fato_adequacao_estoque.csv`
+**não lia deste banco**. O Power Query buscava `estoque_redes.analise_estoque_pdv` direto de
+uma API externa (`apibancocdd-production.up.railway.app`) e recalculava sozinho, em M/DAX,
+toda a cadeia `fato_todos_pdvs` → `#fato_adequacao_estoque` (`SUMMARIZE` com `CALCULATE`/`MAX`/
+`SUM` por SKU) — duplicando exatamente a lógica que este projeto já tem em SQL. Essa duplicação
+foi **validada verbatim** contra o CSV mais recente (ver seção 8): bate 100%, fora de diferenças
+esperadas de snapshot (dado "ao vivo" mudando entre a exportação do Power BI e a consulta).
+
+**Problema que motivou a integração:** o app (seção 11) tem um workflow de aprovação onde o
+BI&A pode aceitar o VB sugerido por um representante, sobrescrevendo o "Estoque Ideal" do
+sistema (`fato_adequacao_estoque_unpivot_ajustada`). Como o Power BI recalculava tudo do zero
+via API, **nunca via essas aprovações** — o KAM sempre exportava o VB "puro do sistema", nunca
+o ajustado pelo representante.
+
+**Solução de menor esforço:** `trade_fv.fato_adequacao_estoque_ajustada` (`10_ajustada_pivot.sql`)
+— mesma forma larga de `fato_adequacao_estoque` (1 linha por PDV, mesmas colunas), só que os 5
+campos `Estoque Ideal Final <SKU>` / `... Total` vêm de `fato_adequacao_estoque_unpivot_ajustada`
+pivotada (`COALESCE(VB aprovado mais recente, valor do sistema)`) em vez da matview base. Todo o
+resto (estoque bruto, sell-out, média, CAT, cobertura, status etc.) é idêntico — só o "Estoque
+Ideal Final" muda quando existe aprovação. Testada ponta a ponta: aprovando uma sugestão de
+teste, a `_ajustada` refletiu o VB aprovado (e o Total recalculado) enquanto a base ficou
+intacta; revertido depois.
+
+**No lado do Power BI, a troca é de uma query só** — sem tocar em medida, visual ou relacionamento
+que já use a tabela `fato_adequacao_estoque`: apagar a cadeia `fato_todos_pdvs` → `#fato_adequacao_estoque`
+(API + DAX) e criar uma query nova, com o **mesmo nome** `fato_adequacao_estoque`, conectando
+direto no Postgres pelo conector nativo ("Obter Dados" → "Banco de dados PostgreSQL"):
+
+```
+let
+    Origem = PostgreSQL.Database("<DB_HOST>:<DB_PORT>", "<DB_NAME>"),
+    tabela = Origem{[Schema="trade_fv", Item="fato_adequacao_estoque_ajustada"]}[Data]
+in
+    tabela
+```
+
+(`<DB_HOST>`/`<DB_PORT>`/`<DB_NAME>` = os mesmos valores do `.env` do projeto — usuário/senha o
+Power BI pede na hora de conectar.) A partir do próximo refresh do Power BI, qualquer aprovação
+feita no app já aparece no export do KAM, sem manutenção adicional — o DAX/M duplicado desaparece
+e a fonte de verdade passa a ser só este banco.
+
+**Pré-requisito de rede (fora do nosso controle):** a máquina/gateway que roda o refresh do
+Power BI precisa alcançar `<DB_HOST>:<DB_PORT>` (host público do Railway) — se a rede do KAM
+bloquear a porta, é preciso liberar ou usar um gateway com saída permitida.
+
+**PDVs aprovados fora da base** (cadastro manual — CNPJ que não existe em
+`estoque_redes.analise_estoque_pdv`) **também aparecem**, como linhas extras no fim da view —
+com o que temos deles no snapshot gravado em `sugestao_fv` no momento do envio (rede, estoque
+atual informado — se houver, VB aprovado por SKU) e `NULL` no resto (CAT, Cobertura FV,
+Potencial, Sell-out, Média Mensal, `STATUS_PARAMETRIZADO`), já que esses campos nunca foram
+calculados para um CNPJ fora do universo rastreado. `Estoque Total`/`Estoque Ideal Final Total`
+seguem a mesma regra de soma da base (tratam ausência como `0`, nunca ficam `NULL` só por
+faltar dado — consistente com o resto do modelo). Testado ponta a ponta aprovando duas
+sugestões reais (`id 62/63`, CNPJ fora da base) e revertendo em seguida — a linha nova apareceu
+com exatamente os campos esperados preenchidos/vazios.

@@ -18,9 +18,39 @@
 --    06_sugestao_workflow.sql. Este arquivo eh re-executavel: eh a fonte
 --    unica do matview fato_adequacao_estoque (nao criar migracoes que
 --    dupliquem este corpo -- editar aqui e re-rodar).
+--
+--    fato_todos_pdvs e fato_cdd_90_dias_agrupada nascem como VIEW comum no
+--    01_views_base.sql (deploy do zero) e so viram MATERIALIZED VIEW aqui.
+--    Rodar "DROP MATERIALIZED VIEW IF EXISTS" direto nelas falha com
+--    WrongObjectType nesse primeiro deploy, porque o objeto existe mas
+--    e do tipo errado -- IF EXISTS so suprime "nao existe", nao "existe
+--    com outro tipo" (bug real descoberto na migracao AWS/RDS, 2026-09-11:
+--    ver docs/arquitetura/plano-migracao-railway-desligamento.md do repo
+--    sales_force_crm). O DO $$ abaixo confere o relkind em pg_class e
+--    dropa com o comando certo (view, matview, ou nao faz nada se nao
+--    existir) -- funciona tanto no deploy do zero quanto no re-run normal
+--    de recriar um ambiente que ja tem as matviews.
 DROP MATERIALIZED VIEW IF EXISTS trade_fv.fato_adequacao_estoque CASCADE;
-DROP MATERIALIZED VIEW IF EXISTS trade_fv.fato_todos_pdvs CASCADE;
-DROP MATERIALIZED VIEW IF EXISTS trade_fv.fato_cdd_90_dias_agrupada CASCADE;
+
+DO $$
+DECLARE
+  alvo text;
+BEGIN
+  FOREACH alvo IN ARRAY ARRAY['fato_todos_pdvs', 'fato_cdd_90_dias_agrupada']
+  LOOP
+    IF EXISTS (
+      SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+      WHERE n.nspname = 'trade_fv' AND c.relname = alvo AND c.relkind = 'v'
+    ) THEN
+      EXECUTE format('DROP VIEW trade_fv.%I CASCADE', alvo);
+    ELSIF EXISTS (
+      SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+      WHERE n.nspname = 'trade_fv' AND c.relname = alvo AND c.relkind = 'm'
+    ) THEN
+      EXECUTE format('DROP MATERIALIZED VIEW trade_fv.%I CASCADE', alvo);
+    END IF;
+  END LOOP;
+END $$;
 
 -- ================================================================================
 -- 2) MATERIALIZED VIEW: fato_cdd_90_dias_agrupada

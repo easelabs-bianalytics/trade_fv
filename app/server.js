@@ -1041,6 +1041,16 @@ app.patch('/api/sugestoes/:id', auth(['admin']), asyncRoute(async (req, res) => 
 }));
 
 // ----------------------------------------------------------------------------
+// Health check — usado pelo target group do ALB (AWS). Sem auth de propósito
+// (o ALB não manda X-Auth-Token). Confere conexão real com o banco, não só
+// "o processo Node está de pé" — um app sem banco não serve pra nada.
+// ----------------------------------------------------------------------------
+app.get('/health', asyncRoute(async (_req, res) => {
+  await pool.query('SELECT 1');
+  res.json({ status: 'ok' });
+}));
+
+// ----------------------------------------------------------------------------
 // SPA: caminhos de página servem o index.html (roteamento no cliente)
 // ----------------------------------------------------------------------------
 const ROTAS_SPA = [

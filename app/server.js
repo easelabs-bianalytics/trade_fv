@@ -11,9 +11,13 @@ const path = require('path');
 const { Pool } = require('pg');
 const ExcelJS = require('exceljs');
 
+// RDS Postgres exige SSL (equivalente ao sslmode=require usado pelo
+// app_eventos em Python) -- sem isso a conexão cai com "no pg_hba.conf
+// entry ... no encryption". rejectUnauthorized:false porque não
+// carregamos o CA bundle da AWS, mesmo trade-off do sslmode=require.
 const pool = new Pool(
   process.env.DATABASE_URL
-    ? { connectionString: process.env.DATABASE_URL, max: 10 }
+    ? { connectionString: process.env.DATABASE_URL, max: 10, ssl: { rejectUnauthorized: false } }
     : {
         host: process.env.DB_HOST,
         port: Number(process.env.DB_PORT || 5432),
@@ -21,6 +25,7 @@ const pool = new Pool(
         user: process.env.DB_USER,
         password: process.env.DB_PASSWORD,
         max: 10,
+        ssl: { rejectUnauthorized: false },
       }
 );
 

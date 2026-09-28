@@ -748,6 +748,10 @@ app.post('/api/sugestoes', auth(), asyncRoute(async (req, res) => {
   const { cnpj, ean, sugestao_vb, rede } = req.body || {};
   const cnpjNum = String(cnpj || '').replace(/\D/g, '');
   const vb = Number(sugestao_vb);
+  // Comentário do rep: opcional. Um por envio — o front manda o mesmo texto
+  // para cada SKU marcado. Trunca em 500 (mesmo teto do CHECK no banco) e
+  // normaliza vazio para NULL, para não gravar string vazia.
+  const comentario = String(req.body?.comentario ?? '').trim().slice(0, 500) || null;
 
   // Modo BI&A (admin): a alteração de VB entra já APROVADA na sugestão oficial.
   const modoBia = req.role === 'admin' && req.body?.modo === 'bia';
@@ -815,17 +819,17 @@ app.post('/api/sugestoes', auth(), asyncRoute(async (req, res) => {
       INSERT INTO trade_fv.sugestao_fv
         ("CNPJ","Rede","CAT","Ultima Venda (dias)","SKU","Cobertura FV","Status",
          "Estoque Atual","Estoque Ideal","EAN","Delta","Ajuste","Sugestao VB","Representante",
-         status_aprovacao, decidido_por, decidido_em)
+         status_aprovacao, decidido_por, decidido_em, comentario)
       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,
-              $15, $16, CASE WHEN $15 = 'PENDENTE' THEN NULL ELSE now() END)
+              $15, $16, CASE WHEN $15 = 'PENDENTE' THEN NULL ELSE now() END, $17)
       RETURNING id, "CNPJ" AS cnpj, "SKU" AS sku, "EAN" AS ean,
                 "Sugestao VB" AS sugestao_vb, "Representante" AS representante,
-                status_aprovacao, created_at
+                status_aprovacao, created_at, comentario
     `, [
       s['CNPJ'], s['Rede'], s['CAT'], s['Ultima Venda (dias)'], s['SKU'],
       s['Cobertura FV'], s['Status'], s['Estoque Atual'], s['Estoque Ideal'],
       s['EAN'], s['Delta'], s['Ajuste'], vb, representante,
-      statusInsert, decididoPor,
+      statusInsert, decididoPor, comentario,
     ]);
     res.status(201).json(rows[0]);
   } catch (err) {
@@ -895,7 +899,7 @@ const SQL_SUGESTOES_SELECT = `
          s."Estoque Ideal" AS estoque_ideal, s."Sugestao VB" AS sugestao_vb,
          uni."Média Mensal" AS media_mensal,
          s."Representante" AS representante, s.status_aprovacao,
-         s.created_at, s.decidido_por, s.decidido_em
+         s.created_at, s.decidido_por, s.decidido_em, s.comentario
   FROM trade_fv.sugestao_fv s
   LEFT JOIN tdd.dim_pdv p ON p."CNPJ_PDV" = s."CNPJ"
   LEFT JOIN trade_fv.fato_adequacao_estoque_unpivot uni
@@ -959,6 +963,7 @@ app.get('/api/sugestoes/exportar', auth(['admin', 'gr']), asyncRoute(async (req,
     { header: 'VB Sugerido REP', key: 'vb_rep', width: 16 },
     { header: 'Und/mês', key: 'media', width: 12 },
     { header: 'Status', key: 'status', width: 14 },
+    { header: 'Comentário do rep', key: 'comentario', width: 52 },
   ];
 
   rows.forEach((r) => {
@@ -976,6 +981,7 @@ app.get('/api/sugestoes/exportar', auth(['admin', 'gr']), asyncRoute(async (req,
       vb_rep: Number(r.sugestao_vb),
       media: r.media_mensal != null ? Number(r.media_mensal) : null,
       status: STATUS_LABEL_SRV[r.status_aprovacao] || r.status_aprovacao,
+      comentario: r.comentario || '',
     });
   });
 
@@ -1005,9 +1011,11 @@ app.get('/api/sugestoes/exportar', auth(['admin', 'gr']), asyncRoute(async (req,
     statusCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: STATUS_FILL_SRV[r.status_aprovacao] || zebra } };
     statusCell.font = { bold: true };
     statusCell.alignment = { vertical: 'middle', horizontal: 'center' };
+    // comentário é texto livre: quebra linha em vez de vazar pela planilha
+    row.getCell('comentario').alignment = { vertical: 'top', horizontal: 'left', wrapText: true };
   });
 
-  ws.autoFilter = { from: 'A1', to: 'M1' };
+  ws.autoFilter = { from: 'A1', to: 'N1' };
 
   const nomeArquivo = `indicacoes_${new Date().toISOString().slice(0, 10)}.xlsx`;
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');

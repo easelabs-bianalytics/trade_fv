@@ -788,6 +788,15 @@
     $('#btnEnviarTexto').textContent = state.bia
       ? (eans.length === 1 ? 'Salvar VB (BI&A)' : `Salvar ${eans.length} VBs (BI&A)`)
       : (eans.length === 1 ? 'Enviar sugestão' : `Enviar ${eans.length} sugestões`);
+
+    // o comentário acompanha o modo: o rep justifica PARA o BI&A; o BI&A,
+    // quando define o VB direto, registra a justificativa da própria decisão
+    $('#comentarioLabelTexto').textContent = state.bia
+      ? 'Justificativa da definição'
+      : 'Comentário para o BI&A';
+    $('#comentarioAjuda').textContent = eans.length === 1
+      ? 'Fica registrado junto com esta sugestão.'
+      : `Vale para os ${eans.length} SKUs marcados.`;
   };
 
   // ── Revisão da IA (aparece ao clicar em Enviar) ────────────────────────
@@ -873,6 +882,25 @@
     return falhas.map((f) => `${f.sku}: ${f.msg}`).join(' · ');
   };
 
+  // Comentário opcional do rep, escrito uma vez por envio e replicado em cada
+  // SKU marcado. O servidor corta em 500; o maxlength do textarea é o mesmo.
+  const comentarioAtual = () => ($('#comentarioSugestao')?.value || '').trim();
+
+  const limparComentario = () => {
+    const ta = $('#comentarioSugestao');
+    if (!ta) return;
+    ta.value = '';
+    atualizarContadorComentario();
+  };
+
+  const atualizarContadorComentario = () => {
+    const ta = $('#comentarioSugestao');
+    const out = $('#comentarioContador');
+    if (!ta || !out) return;
+    out.textContent = ta.value.length;
+    out.parentElement.classList.toggle('no-limite', ta.value.length >= 500);
+  };
+
   // Envia as sugestões marcadas. `botao` é só quem mostra o estado de carregando.
   const enviarSelecionados = async (botao, fecharModal = false) => {
     const eans = Object.keys(state.selecionados);
@@ -907,6 +935,8 @@
             representante: state.bia ? undefined : state.rep,
             rede: state.pdv.manualRede || undefined,
             modo: state.bia ? 'bia' : undefined,
+            // um comentário por envio: o mesmo texto vai em cada SKU marcado
+            comentario: comentarioAtual() || undefined,
           }),
         })));
 
@@ -937,6 +967,7 @@
       `;
       if (falhas.length) toast(resumirFalhas(falhas), true);
       state.selecionados = {};
+      limparComentario();
       if (fecharModal) fecharRevisao();
       goTo(5);
     } finally {
@@ -967,6 +998,12 @@
         equipe.map((r) => `<option value="${esc(r.desc_territorio)}">${esc(titleCase(r.desc_territorio))}</option>`).join('');
     } catch { /* filtro fica só com "Toda a equipe" */ }
   };
+
+  // Comentário do rep, quando existe, abaixo do PDV — é o contexto de campo
+  // que o BI&A usa para decidir. Sai do fluxo do texto se estiver vazio.
+  const comentarioHtml = (r) => r.comentario
+    ? `<div class="sug-comentario" title="${esc(r.comentario)}">${esc(r.comentario)}</div>`
+    : '';
 
   const carregarMinhasSugestoes = async () => {
     const isGr = state.auth?.role === 'gr';
@@ -1006,7 +1043,7 @@
         <tr>
           <td class="td-num" data-label="Enviada">${fmtData(r.created_at)}</td>
           ${isGr ? `<td data-label="Representante">${esc(repDisplay(r.representante))}</td>` : ''}
-          <td data-label="PDV">${esc(r.rede ? redeLabel(r.rede) : titleCase(r.nome_pdv || ''))}<div class="decidido">${fmtCNPJ(r.cnpj)}</div></td>
+          <td data-label="PDV">${esc(r.rede ? redeLabel(r.rede) : titleCase(r.nome_pdv || ''))}<div class="decidido">${fmtCNPJ(r.cnpj)}</div>${comentarioHtml(r)}</td>
           <td data-label="Cidade">${esc(titleCase(r.cidade || '—'))}${r.uf ? '/' + esc(r.uf) : ''}</td>
           <td data-label="SKU">${esc(r.sku)}</td>
           <td class="td-num" data-label="Estq. atual">${r.estoque_atual ?? '—'}</td>
@@ -1106,7 +1143,7 @@
         <tr data-id="${r.id}">
           <td class="td-num" data-label="Enviada">${fmtData(r.created_at)}</td>
           <td data-label="Representante">${esc(repDisplay(r.representante))}</td>
-          <td data-label="PDV">${esc(r.rede ? redeLabel(r.rede) : titleCase(r.nome_pdv || ''))}<div class="decidido">${fmtCNPJ(r.cnpj)}</div></td>
+          <td data-label="PDV">${esc(r.rede ? redeLabel(r.rede) : titleCase(r.nome_pdv || ''))}<div class="decidido">${fmtCNPJ(r.cnpj)}</div>${comentarioHtml(r)}</td>
           <td data-label="Rede">${esc(r.rede ? redeLabel(r.rede) : '—')}</td>
           <td data-label="SKU">${esc(r.sku)}</td>
           <td class="td-num" data-label="Estq. atual">${r.estoque_atual ?? '—'}</td>
@@ -1328,6 +1365,8 @@
   // determinístico) continua pronto e testado — nada foi removido.
   $('#btnEnviar').addEventListener('click', () => enviarSelecionados($('#btnEnviar')));
 
+  $('#comentarioSugestao').addEventListener('input', atualizarContadorComentario);
+
   $('#btnVoltarAjustar').addEventListener('click', fecharRevisao);
   $('#btnConfirmarEnvio').addEventListener('click',
     () => enviarSelecionados($('#btnConfirmarEnvio'), true));
@@ -1353,6 +1392,7 @@
     goTo(4);
   });
   $('#btnNovoPdv').addEventListener('click', () => {
+    limparComentario();   // comentário é do PDV que acabou de sair de cena
     $('#pdvSearch').value = '';
     $('#pdvResults').innerHTML = '';
     $('#manualPdv').classList.remove('open');

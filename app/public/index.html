@@ -422,11 +422,25 @@
       <div class="sku-grid" id="skuGrid"></div>
 
       <div class="submit-bar" id="submitBar" style="display:none">
-        <div class="submit-resumo" id="submitResumo"></div>
-        <button class="btn btn-success btn-lg" id="btnEnviar">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
-          <span id="btnEnviarTexto">Enviar sugestão</span>
-        </button>
+        <div class="submit-comentario">
+          <label for="comentarioSugestao">
+            <span id="comentarioLabelTexto">Comentário para o BI&amp;A</span>
+            <span class="rotulo-opcional">opcional</span>
+          </label>
+          <textarea id="comentarioSugestao" rows="2" maxlength="500"
+                    placeholder="O que você viu no PDV que justifica esse VB? Ex.: loja reformou e o giro subiu; gerente pediu reposição."></textarea>
+          <div class="comentario-rodape">
+            <span class="comentario-ajuda" id="comentarioAjuda">Vale para todos os SKUs marcados.</span>
+            <span class="comentario-contador"><span id="comentarioContador">0</span>/500</span>
+          </div>
+        </div>
+        <div class="submit-acoes">
+          <div class="submit-resumo" id="submitResumo"></div>
+          <button class="btn btn-success btn-lg" id="btnEnviar">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+            <span id="btnEnviarTexto">Enviar sugestão</span>
+          </button>
+        </div>
       </div>
     </section>
 

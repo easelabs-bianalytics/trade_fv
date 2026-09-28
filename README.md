@@ -402,7 +402,8 @@ Comparação contra exports do Power BI (`fato_adequacao` e positivação PAGUEM
 │       ├── 07_usuarios.sql
 │       ├── 08_index_categoria.sql
 │       ├── 09_gr.sql
-│       └── 10_ajustada_pivot.sql
+│       ├── 10_ajustada_pivot.sql
+│       └── 11_comentario_sugestao.sql
 ├── app/                       # Sistema web de indicação de PDVs (seção 11)
 │   ├── Dockerfile             # imagem do app web (node:20-alpine) → ECR cockpit-prod-trade-fv
 │   ├── .dockerignore
@@ -945,6 +946,29 @@ recente** por CNPJ × SKU — se o rep pedir 5 e depois 8 e ambas forem aprovada
 `"Representante"`. PDVs aprovados fora da base (cadastro manual) entram como linhas
 adicionais. É esta view que o downstream deve consumir como "sugestão oficial".
 
+### Comentário do representante (`11_comentario_sugestao.sql`)
+
+Justificativa livre e **opcional** que o rep escreve no momento do envio (etapa 4, na barra
+de envio). Existe para o BI&A entender o **porquê** da sugestão na hora de aprovar ou recusar —
+contexto de campo que nenhum número do snapshot carrega: loja reformou, gerente pediu reposição,
+ruptura observada, sazonalidade local.
+
+- **Coluna:** `trade_fv.sugestao_fv.comentario TEXT`, com
+  `CHECK (comentario IS NULL OR char_length(comentario) BETWEEN 1 AND 500)`. O servidor faz
+  `trim`, corta em 500 e normaliza vazio para `NULL` — string vazia nunca entra.
+- **Um comentário por envio.** Se o rep marca vários SKUs de uma vez, o **mesmo texto é gravado
+  em cada linha**. Não é normalização perdida: cada linha já é um snapshot independente (Rede,
+  CAT, Estoque, Ajuste) **e** uma unidade de decisão independente do BI&A — então carrega também
+  a própria justificativa. Isso mantém a tela de aprovação e o export sem join nenhum.
+- **Histórico:** após uma decisão o rep pode reenviar (linha nova). Cada reenvio tem o próprio
+  comentário, então dá para acompanhar como o argumento evoluiu entre uma recusa e a tentativa
+  seguinte.
+- **Onde aparece:** tela de **Aprovações** (abaixo do PDV, que é onde a decisão acontece),
+  **Minhas sugestões / Indicações da equipe**, e como coluna **"Comentário do rep"** no `.xlsx`.
+  Fora do contexto enviado à revisão por IA — decisão deliberada.
+- **Modo BI&A:** o mesmo campo vira "Justificativa da definição" quando o admin define o VB
+  direto, registrando o motivo da própria decisão.
+
 ### API (Express)
 | Rota | Auth | Descrição |
 |---|---|---|
@@ -959,7 +983,7 @@ adicionais. É esta view que o downstream deve consumir como "sugestão oficial"
 | `POST /api/recomendacao` | login | `{cnpj, ean}` → recomendação de VB pela IA (ver seção própria). |
 | `GET /api/pdvs?q=` | login | Busca de PDVs (base de adequação) com rede e categoria. Acento-insensível, multi-token, ranqueada por cidade/bairro/rede, `LIMIT 25`. |
 | `GET /api/pdv/:cnpj` | login | Dados + categoria + adequação (com `media_mensal`) + território. Sugestões existentes: `admin` vê tudo; `gr` vê a própria equipe + as que ele mesmo enviou; `rep` recebe `[]`. |
-| `POST /api/sugestoes` | login | Insere sugestão (snapshot). `{modo:'bia'}` (admin) grava já aprovada como `'BI&A'`. `role=gr` grava com `"Representante" = "<Nome> (GR)"`, status PENDENTE (não aprova a própria). **409** se já houver PENDENTE do mesmo autor p/ CNPJ × SKU (não se aplica ao modo BI&A). |
+| `POST /api/sugestoes` | login | Insere sugestão (snapshot). Aceita `comentario` (opcional, ≤ 500 chars, `trim`, vazio → `NULL`). `{modo:'bia'}` (admin) grava já aprovada como `'BI&A'`. `role=gr` grava com `"Representante" = "<Nome> (GR)"`, status PENDENTE (não aprova a própria). **409** se já houver PENDENTE do mesmo autor p/ CNPJ × SKU (não se aplica ao modo BI&A). |
 | `GET /api/sugestoes?rep=` \| `?cnpj=` \| `?all=1[&rep=&status=&data_de=&data_ate=]` | admin | Histórico completo (com `media_mensal`) — exclusivo do admin; reps recebem `[]`. **GR** usa a mesma rota (sem `all=`, que é exclusivo do admin): sempre escopado à própria equipe (+ próprias sugestões); `?rep=&status=&data_de=&data_ate=` disponíveis; `?rep=` fora do time é ignorado. |
 | `GET /api/sugestoes/exportar` | admin, gr | Mesmos filtros de `GET /api/sugestoes` acima → `.xlsx` formatado (`exceljs`, ver seção "Indicações da equipe"). **400** se nenhum filtro for informado (admin). |
 | `PATCH /api/sugestoes/:id` | admin | `{acao: APROVADA\|RECUSADA}` → decide pendente. |

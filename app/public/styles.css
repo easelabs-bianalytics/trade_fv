@@ -1346,14 +1346,88 @@ td .decidido { font-size: 11.5px; color: var(--gray-500); }
   box-shadow: var(--shadow-xl);
   padding: 14px 20px;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
   animation: fadeInUp 0.4s ease-out both;
   z-index: 10;
 }
+/* linha de baixo da barra: resumo à esquerda, botão à direita (o layout que
+   a barra inteira tinha antes de ganhar o campo de comentário acima) */
+.submit-bar .submit-acoes {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
 .submit-bar .submit-resumo { font-size: 13px; color: var(--gray-600); }
 .submit-bar .submit-resumo strong { color: var(--gray-900); }
+
+.submit-comentario label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--gray-700);
+  margin-bottom: 6px;
+}
+.rotulo-opcional {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--gray-500);
+  background: var(--gray-100);
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+.submit-comentario textarea {
+  width: 100%;
+  resize: vertical;
+  min-height: 56px;
+  padding: 10px 12px;
+  font: inherit;
+  font-size: 14px;
+  color: var(--gray-900);
+  background: #fff;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.submit-comentario textarea::placeholder { color: var(--gray-400); }
+.submit-comentario textarea:focus {
+  outline: none;
+  border-color: var(--primary-600);
+  box-shadow: 0 0 0 3px rgba(85, 88, 212, 0.15);
+}
+.comentario-rodape {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--gray-500);
+}
+/* em tela estreita a ajuda cede espaço; o contador nunca quebra */
+.comentario-ajuda { min-width: 0; }
+.comentario-contador { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.comentario-contador.no-limite { color: var(--error); font-weight: 600; }
+
+/* comentário do rep exibido nas tabelas (aprovações e minhas sugestões) */
+.sug-comentario {
+  margin-top: 6px;
+  padding-left: 8px;
+  border-left: 3px solid var(--primary-200);
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--gray-600);
+  font-style: italic;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-width: 42ch;
+}
 
 /* ============================================================
    SUCESSO

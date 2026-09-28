@@ -15,15 +15,20 @@ const ExcelJS = require('exceljs');
 // app_eventos em Python) -- sem isso a conexão cai com "no pg_hba.conf
 // entry ... no encryption". rejectUnauthorized:false porque não
 // carregamos o CA bundle da AWS, mesmo trade-off do sslmode=require.
+// Em produção (ECS) cada campo chega como secret próprio: DB_HOST/DB_PORT/
+// DB_NAME/DB_USER/DB_PASSWORD. No desenvolvimento local o .env do projeto usa
+// o prefixo COCKPIT_DB_* (mesmo nome das credenciais do RDS) e a conexão passa
+// pelo túnel SSM em 127.0.0.1:15432 — daí o fallback, que evita manter a mesma
+// senha escrita duas vezes no arquivo.
 const pool = new Pool(
   process.env.DATABASE_URL
     ? { connectionString: process.env.DATABASE_URL, max: 10, ssl: { rejectUnauthorized: false } }
     : {
-        host: process.env.DB_HOST,
-        port: Number(process.env.DB_PORT || 5432),
-        database: process.env.DB_NAME,
-        user: process.env.DB_USER,
-        password: process.env.DB_PASSWORD,
+        host: process.env.DB_HOST || process.env.COCKPIT_DB_HOST,
+        port: Number(process.env.DB_PORT || process.env.COCKPIT_DB_PORT || 5432),
+        database: process.env.DB_NAME || process.env.COCKPIT_DB_NAME,
+        user: process.env.DB_USER || process.env.COCKPIT_DB_USER,
+        password: process.env.DB_PASSWORD || process.env.COCKPIT_DB_PASS,
         max: 10,
         ssl: { rejectUnauthorized: false },
       }

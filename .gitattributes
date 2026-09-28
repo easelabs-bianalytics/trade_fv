@@ -1,0 +1,7 @@
+# O repo é editado no Windows (core.autocrlf=true), mas estes arquivos são
+# consumidos por Linux — WSL e os containers. Com CRLF o bash lê o \r como
+# parte do último token da linha: `set -euo pipefail` vira "pipefail\r" e
+# falha com "invalid option name". Forçar LF evita isso na origem.
+*.sh            text eol=lf
+Dockerfile      text eol=lf
+.dockerignore   text eol=lf

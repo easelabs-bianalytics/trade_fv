@@ -1518,7 +1518,8 @@ td .decidido { font-size: 11.5px; color: var(--gray-500); }
      caber na tela: assim só as linhas rolam, sem um segundo scroll na página. */
   overflow: auto;
   max-height: calc(100dvh - 400px);
-  min-height: 220px;
+  /* sem min-height: com poucas linhas o container sobrava como um bloco
+     branco vazio embaixo da tabela */
   -webkit-overflow-scrolling: touch;
   border-radius: var(--radius-lg);
   border: 1px solid var(--border-light);
@@ -1560,6 +1561,31 @@ tbody tr:last-child td { border-bottom: none; }
   padding: 8px 10px;
 }
 #panel-sugestoes td { padding: 9px 10px; }
+
+/* Aprovações: mesma compactação, pelo mesmo motivo — a tela ganhou as colunas
+   "VB a liberar", "Motivo do ajuste" e "CAT", e com o padding padrão a soma
+   estourava a largura e escondia as ações atrás do scroll horizontal. */
+#panel-aprovacoes th {
+  white-space: normal;
+  line-height: 1.25;
+  padding: 8px 9px;
+}
+#panel-aprovacoes td { padding: 8px 9px; }
+#panel-aprovacoes table { font-size: 13px; }
+#panel-aprovacoes .td-editavel .vb-liberar { width: 72px; }
+#panel-aprovacoes .td-editavel .motivo-ajuste { min-width: 150px; }
+
+/* "VB a liberar" é onde a decisão acontece: um trilho discreto de cor separa
+   o que o rep pediu do que de fato vai valer. Sem gritar — a tabela já tem
+   badge colorido de status. */
+#panel-aprovacoes .col-liberar {
+  background: var(--primary-50);
+  border-left: 2px solid var(--primary-200);
+}
+#panel-aprovacoes th.col-liberar { color: var(--primary-700); }
+@media (hover: hover) {
+  #panel-aprovacoes tbody tr:hover > td.col-liberar { background: var(--primary-100); }
+}
 
 /* ── Estado vazio ── */
 .empty-state {

@@ -1162,12 +1162,12 @@
           <td class="td-num" data-label="Enviada">${fmtData(r.created_at)}</td>
           <td data-label="Representante">${esc(repDisplay(r.representante))}</td>
           <td data-label="PDV">${esc(r.rede ? redeLabel(r.rede) : titleCase(r.nome_pdv || ''))}<div class="decidido">${fmtCNPJ(r.cnpj)}</div>${comentarioHtml(r)}</td>
-          <td data-label="Rede">${esc(r.rede ? redeLabel(r.rede) : '—')}</td>
+          <td class="td-num" data-label="CAT">${r.categoria ?? '—'}</td>
           <td data-label="SKU">${esc(r.sku)}</td>
           <td class="td-num" data-label="Estq. atual">${r.estoque_atual ?? '—'}</td>
           <td class="td-num" data-label="VB sugerido BI">${r.estoque_ideal ?? '—'}</td>
           <td class="td-num" data-label="VB do rep"><strong>${esc(r.sugestao_vb)}</strong></td>
-          <td class="td-num td-editavel" data-label="VB a liberar">
+          <td class="td-num td-editavel col-liberar" data-label="VB a liberar">
             ${r.status_aprovacao === 'PENDENTE'
               ? `<input type="number" class="vb-liberar" min="0" step="1"
                         value="${esc(r.sugestao_vb)}" aria-label="VB a liberar para ${esc(r.sku)}">`

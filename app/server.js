@@ -904,13 +904,18 @@ const SQL_SUGESTOES_SELECT = `
          s."Ajuste" AS ajuste, s."Estoque Atual" AS estoque_atual,
          s."Estoque Ideal" AS estoque_ideal, s."Sugestao VB" AS sugestao_vb,
          uni."Média Mensal" AS media_mensal,
+         -- categoria do PDV: a vigente (tdd.fato_tdd, mesma fonte da busca e da
+         -- tela do PDV) e, quando o CNPJ não está no universo rastreado (PDV de
+         -- cadastro manual), o "CAT" congelado no snapshot da própria sugestão
+         COALESCE(cat.categoria, s."CAT") AS categoria,
          s."Representante" AS representante, s.status_aprovacao,
          s.created_at, s.decidido_por, s.decidido_em, s.comentario,
          s.vb_aprovado, s.comentario_bia
   FROM trade_fv.sugestao_fv s
   LEFT JOIN tdd.dim_pdv p ON p."CNPJ_PDV" = s."CNPJ"
   LEFT JOIN trade_fv.fato_adequacao_estoque_unpivot uni
-         ON uni."CNPJ" = s."CNPJ" AND uni."EAN" = s."EAN"`;
+         ON uni."CNPJ" = s."CNPJ" AND uni."EAN" = s."EAN"
+  ${SQL_CATEGORIA_LATERAL}`;
 
 app.get('/api/sugestoes', auth(), asyncRoute(async (req, res) => {
   const { where, params, semFiltro } = await montarFiltroSugestoes(req);

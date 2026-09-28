@@ -151,6 +151,22 @@
     ? `<div class="sug-comentario sug-comentario-bia" title="${esc(r.comentario_bia)}">BI&A: ${esc(r.comentario_bia)}</div>`
     : '';
 
+  // travessão de "não se aplica" — cinza claro, para não competir com os dados
+  const vazio = () => '<span class="celula-vazia">—</span>';
+
+  // Coluna "VB a liberar" em linha já decidida. Linhas aprovadas antes desta
+  // coluna existir têm vb_aprovado nulo, mas o que valeu foi o pedido do rep —
+  // mostrar "—" ali seria enganoso. Mesma regra do COALESCE da view.
+  // Negrito só quando o BI&A mudou o número; igual ao pedido fica discreto.
+  const vbLiberadoHtml = (r) => {
+    if (r.status_aprovacao === 'RECUSADA') return vazio();
+    const efetivo = r.vb_aprovado ?? r.sugestao_vb;
+    const mudou = Number(efetivo) !== Number(r.sugestao_vb);
+    return mudou
+      ? `<strong class="vb-mudou">${esc(efetivo)}</strong>`
+      : `<span class="vb-igual">${esc(efetivo)}</span>`;
+  };
+
   const toast = (msg, isError = false, duracao = 5200) => {
     document.querySelectorAll('.toast').forEach((t) => t.remove());
     const el = document.createElement('div');
@@ -1162,25 +1178,25 @@
           <td class="td-num" data-label="Enviada">${fmtData(r.created_at)}</td>
           <td data-label="Representante">${esc(repDisplay(r.representante))}</td>
           <td data-label="PDV">${esc(r.rede ? redeLabel(r.rede) : titleCase(r.nome_pdv || ''))}<div class="decidido">${fmtCNPJ(r.cnpj)}</div>${comentarioHtml(r)}</td>
-          <td class="td-num" data-label="CAT">${r.categoria ?? '—'}</td>
+          <td class="td-num td-valor" data-label="CAT">${r.categoria ?? vazio()}</td>
           <td data-label="SKU">${esc(r.sku)}</td>
-          <td class="td-num" data-label="Estq. atual">${r.estoque_atual ?? '—'}</td>
-          <td class="td-num" data-label="VB sugerido BI">${r.estoque_ideal ?? '—'}</td>
-          <td class="td-num" data-label="VB do rep"><strong>${esc(r.sugestao_vb)}</strong></td>
-          <td class="td-num td-editavel col-liberar" data-label="VB a liberar">
+          <td class="td-num td-valor" data-label="Estq. atual">${r.estoque_atual ?? vazio()}</td>
+          <td class="td-num td-valor" data-label="VB sugerido BI">${r.estoque_ideal ?? vazio()}</td>
+          <td class="td-num td-valor" data-label="VB do rep"><strong>${esc(r.sugestao_vb)}</strong></td>
+          <td class="td-num td-valor td-editavel col-liberar" data-label="VB a liberar">
             ${r.status_aprovacao === 'PENDENTE'
               ? `<input type="number" class="vb-liberar" min="0" step="1"
                         value="${esc(r.sugestao_vb)}" aria-label="VB a liberar para ${esc(r.sku)}">`
-              : (r.vb_aprovado != null ? `<strong>${esc(r.vb_aprovado)}</strong>` : '—')}
+              : vbLiberadoHtml(r)}
           </td>
           <td class="td-editavel" data-label="Motivo do ajuste">
             ${r.status_aprovacao === 'PENDENTE'
               ? `<input type="text" class="motivo-ajuste" maxlength="500"
-                        placeholder="Opcional — só se mudar o VB"
+                        placeholder="Opcional"
                         aria-label="Motivo do ajuste para ${esc(r.sku)}">`
-              : (r.comentario_bia ? `<div class="sug-comentario sug-comentario-bia">${esc(r.comentario_bia)}</div>` : '—')}
+              : (r.comentario_bia ? `<div class="sug-comentario sug-comentario-bia">${esc(r.comentario_bia)}</div>` : '')}
           </td>
-          <td class="td-num" data-label="Und / mês">${fmtMedia(r.media_mensal)}</td>
+          <td class="td-num td-valor" data-label="Und / mês">${fmtMedia(r.media_mensal)}</td>
           <td data-label="Status">
             <span class="badge ${STATUS_SUG_BADGE[r.status_aprovacao] || 'badge-gray'}">${esc(rotuloDecisao(r))}</span>
             ${r.decidido_em ? `<div class="decidido">${fmtData(r.decidido_em)}</div>` : ''}
@@ -1194,7 +1210,7 @@
                 <button class="btn-recusar" title="Recusar" data-acao="RECUSADA">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
                 </button>
-              </div>` : '—'}
+              </div>` : vazio()}
           </td>
         </tr>
       `).join('');

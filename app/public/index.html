@@ -215,7 +215,21 @@
       <div class="table-wrapper">
         <table>
           <thead>
-            <tr><th>Enviada</th><th>Representante</th><th>PDV</th><th>CAT</th><th>SKU</th><th>Estq. atual</th><th>VB Sugerido BI</th><th>VB Sugerido REP</th><th class="col-liberar">VB a liberar</th><th>Motivo do ajuste</th><th>Und/mês</th><th>Status</th><th>Ações</th></tr>
+            <tr>
+              <th>Enviada</th>
+              <th>Representante</th>
+              <th>PDV</th>
+              <th class="th-valor" title="Categoria do PDV (CAT_UN)">CAT</th>
+              <th>SKU</th>
+              <th class="th-valor" title="Estoque atual no PDV">Estoque</th>
+              <th class="th-valor" title="VB sugerido pelo sistema">VB BI</th>
+              <th class="th-valor" title="VB sugerido pelo representante">VB Rep</th>
+              <th class="th-valor col-liberar" title="VB que será incorporado à sugestão oficial">VB a liberar</th>
+              <th title="Motivo do ajuste — opcional">Motivo</th>
+              <th class="th-valor" title="Média de unidades vendidas por mês">Und/mês</th>
+              <th>Status</th>
+              <th>Ações</th>
+            </tr>
           </thead>
           <tbody id="aprovBody"></tbody>
         </table>

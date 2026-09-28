@@ -1572,8 +1572,22 @@ tbody tr:last-child td { border-bottom: none; }
 }
 #panel-aprovacoes td { padding: 8px 9px; }
 #panel-aprovacoes table { font-size: 13px; }
-#panel-aprovacoes .td-editavel .vb-liberar { width: 72px; }
-#panel-aprovacoes .td-editavel .motivo-ajuste { min-width: 150px; }
+#panel-aprovacoes .td-editavel .vb-liberar { width: 68px; }
+#panel-aprovacoes .td-editavel .motivo-ajuste { min-width: 140px; }
+
+/* Números alinhados à direita e com algarismos tabulares: é o que deixa
+   3000 / 1 / 9999 comparáveis de relance numa coluna. Cabeçalho acompanha,
+   senão o rótulo fica solto em cima dos valores. */
+#panel-aprovacoes th.th-valor,
+#panel-aprovacoes td.td-valor { text-align: right; }
+#panel-aprovacoes td.td-valor { font-variant-numeric: tabular-nums; }
+
+/* "não se aplica" recua para o fundo em vez de virar ruído repetido */
+.celula-vazia { color: var(--gray-300); }
+
+/* VB liberado em linha decidida: destaca só quando o BI&A mudou o número */
+#panel-aprovacoes .vb-mudou { color: var(--primary-700); }
+#panel-aprovacoes .vb-igual { color: var(--gray-500); }
 
 /* "VB a liberar" é onde a decisão acontece: um trilho discreto de cor separa
    o que o rep pediu do que de fato vai valer. Sem gritar — a tabela já tem

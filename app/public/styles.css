@@ -729,7 +729,7 @@ body.bg-suave {
   gap: 8px;
   flex-wrap: wrap;
 }
-.btn-aprovar, .btn-recusar, .btn-ajustar {
+.btn-aprovar, .btn-recusar {
   display: inline-flex; align-items: center; justify-content: center;
   width: 32px; height: 32px;
   border-radius: var(--radius-md);
@@ -738,9 +738,7 @@ body.bg-suave {
   cursor: pointer;
   transition: all var(--transition-fast);
 }
-.btn-aprovar svg, .btn-recusar svg, .btn-ajustar svg { width: 15px; height: 15px; }
-.btn-ajustar { color: var(--primary-600); }
-.btn-ajustar:hover { background: var(--primary-600); border-color: var(--primary-600); color: #fff; transform: translateY(-1px); }
+.btn-aprovar svg, .btn-recusar svg { width: 15px; height: 15px; }
 .btn-aprovar { color: var(--green-700); }
 .btn-aprovar:hover { background: var(--green-600); border-color: var(--green-600); color: #fff; transform: translateY(-1px); }
 .btn-recusar { color: var(--error); }
@@ -748,36 +746,30 @@ body.bg-suave {
 .acao-wrap { display: flex; gap: 6px; }
 td .decidido { font-size: 11.5px; color: var(--gray-500); }
 
-/* painel de aprovação parcial — linha extra, escondida até o BI&A pedir */
-.linha-ajuste { display: none; }
-.linha-ajuste.aberta { display: table-row; }
-.linha-ajuste > td { background: var(--primary-50, var(--gray-50)); padding: 14px 16px; }
-.ajuste-box {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: 12px 16px;
-}
-.ajuste-campo { display: flex; flex-direction: column; gap: 5px; }
-.ajuste-campo > span {
-  font-size: 12px; font-weight: 600; color: var(--gray-700);
-  display: flex; align-items: center; gap: 6px;
-}
-.ajuste-campo input {
-  padding: 8px 10px;
+/* aprovação parcial editada na própria linha: o BI&A digita o VB que vai
+   liberar na coluna ao lado do que o rep pediu, e o ✓ aprova esse valor */
+.td-editavel input {
+  width: 100%;
+  padding: 7px 9px;
   font: inherit; font-size: 14px;
   color: var(--gray-900); background: #fff;
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
+  transition: border-color 0.15s, box-shadow 0.15s;
 }
-.ajuste-campo input:focus {
+.td-editavel input:focus {
   outline: none; border-color: var(--primary-600);
   box-shadow: 0 0 0 3px rgba(85, 88, 212, 0.15);
 }
-.ajuste-campo .ajuste-vb { width: 110px; }
-.ajuste-campo-larga { flex: 1 1 260px; }
-.ajuste-campo-larga input { width: 100%; }
-.ajuste-acoes { display: flex; gap: 8px; margin-left: auto; }
+.td-editavel input::placeholder { color: var(--gray-400); font-size: 13px; }
+.td-editavel .vb-liberar { width: 84px; text-align: right; font-weight: 600; }
+/* valor diferente do pedido: destaca antes mesmo de aprovar */
+.td-editavel .vb-liberar.alterado {
+  border-color: var(--primary-600);
+  background: var(--primary-50);
+  color: var(--primary-700);
+}
+.td-editavel .motivo-ajuste { min-width: 180px; }
 
 /* comentário do BI&A: mesmo bloco do rep, cor distinta para não confundir
    quem escreveu o quê */
@@ -1780,22 +1772,18 @@ tbody tr:last-child td { border-bottom: none; }
   .table-wrapper td.td-acoes { padding: 10px 14px; }
   .table-wrapper .acao-wrap { width: 100%; gap: 10px; }
   .table-wrapper .btn-aprovar,
-  .table-wrapper .btn-ajustar,
   .table-wrapper .btn-recusar {
     flex: 1; width: auto; min-height: 48px; gap: 8px;
     font-family: var(--font-family);
     font-size: 14px; font-weight: 600;
   }
   .table-wrapper .btn-aprovar::after { content: 'Aprovar'; }
-  .table-wrapper .btn-ajustar::after { content: 'Ajustar'; }
   .table-wrapper .btn-recusar::after { content: 'Recusar'; }
   .table-wrapper .btn-aprovar svg,
-  .table-wrapper .btn-ajustar svg,
   .table-wrapper .btn-recusar svg { width: 17px; height: 17px; }
-  /* no celular a tabela vira cartões; o painel de ajuste acompanha */
-  .linha-ajuste.aberta { display: block; }
-  .ajuste-acoes { margin-left: 0; width: 100%; }
-  .ajuste-acoes .btn { flex: 1; }
+  /* no celular a tabela vira cartões: os campos ocupam a largura toda */
+  .td-editavel .vb-liberar,
+  .td-editavel .motivo-ajuste { width: 100%; min-width: 0; text-align: left; }
 }
 
 /* ── 5. Celular ── */

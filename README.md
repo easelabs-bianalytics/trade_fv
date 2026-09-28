@@ -998,10 +998,18 @@ cobre as linhas aprovadas antes desta coluna existir, que têm `vb_aprovado` nul
 > view antiga (que filtra só `APROVADA`), toda aprovação parcial some da sugestão oficial — o PDV
 > volta para o VB do sistema sem aviso.
 
-**Na tela de Aprovações:** o botão ✎ **Ajustar** (entre aprovar e recusar) abre um painel com o VB
-já preenchido com o que o rep pediu, mais o campo de motivo. O rótulo do status segue os números,
-não o nome interno: "Atendido parcial" quando corta, "Atendido acima" quando amplia — `PARCIAL`
-cobre os dois casos.
+**Na tela de Aprovações:** a edição é **na própria linha**, em duas colunas novas —
+**"VB a liberar"** (campo numérico, já preenchido com o que o rep pediu, logo ao lado da coluna
+"VB Sugerido REP" para a comparação ficar imediata) e **"Motivo do ajuste"**. O ✓ aprova sempre o
+valor que estiver no campo: se o BI&A não encostou nele, é o pedido do rep e o servidor grava
+`APROVADA`; se mudou, grava `PARCIAL`. Não existe modo ou botão separado para ajustar — é uma
+ação só.
+
+Detalhes que a fila longa exige: o campo fica **destacado assim que o valor difere** do pedido, e
+**Enter aprova a linha**, para percorrer a fila sem tirar a mão do teclado.
+
+O rótulo do status segue os números, não o nome interno: "Atendido parcial" quando corta,
+"Atendido acima" quando amplia — `PARCIAL` cobre os dois casos.
 
 ### API (Express)
 | Rota | Auth | Descrição |

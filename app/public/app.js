@@ -1139,7 +1139,7 @@
   // ---------------------------------------------------------- admin: aprovações
   const carregarAprovacoes = async () => {
     const body = $('#aprovBody');
-    body.innerHTML = '<tr><td colspan="11"><div class="skeleton" style="height:44px"></div></td></tr>';
+    body.innerHTML = '<tr><td colspan="13"><div class="skeleton" style="height:44px"></div></td></tr>';
     try {
       const rep = $('#fRep').value;
       const status = $('#fStatus').value;
@@ -1154,33 +1154,42 @@
         (status === '' ? ` <span class="badge badge-warning">${pend} pendente${pend === 1 ? '' : 's'}</span>` : '');
 
       if (!rows.length) {
-        body.innerHTML = '<tr><td colspan="11" style="text-align:center;color:var(--gray-500);padding:28px">Nenhuma sugestão com esses filtros.</td></tr>';
+        body.innerHTML = '<tr><td colspan="13" style="text-align:center;color:var(--gray-500);padding:28px">Nenhuma sugestão com esses filtros.</td></tr>';
         return;
       }
       body.innerHTML = rows.map((r) => `
         <tr data-id="${r.id}">
           <td class="td-num" data-label="Enviada">${fmtData(r.created_at)}</td>
           <td data-label="Representante">${esc(repDisplay(r.representante))}</td>
-          <td data-label="PDV">${esc(r.rede ? redeLabel(r.rede) : titleCase(r.nome_pdv || ''))}<div class="decidido">${fmtCNPJ(r.cnpj)}</div>${comentarioHtml(r)}${comentarioBiaHtml(r)}</td>
+          <td data-label="PDV">${esc(r.rede ? redeLabel(r.rede) : titleCase(r.nome_pdv || ''))}<div class="decidido">${fmtCNPJ(r.cnpj)}</div>${comentarioHtml(r)}</td>
           <td data-label="Rede">${esc(r.rede ? redeLabel(r.rede) : '—')}</td>
           <td data-label="SKU">${esc(r.sku)}</td>
           <td class="td-num" data-label="Estq. atual">${r.estoque_atual ?? '—'}</td>
           <td class="td-num" data-label="VB sugerido BI">${r.estoque_ideal ?? '—'}</td>
           <td class="td-num" data-label="VB do rep"><strong>${esc(r.sugestao_vb)}</strong></td>
+          <td class="td-num td-editavel" data-label="VB a liberar">
+            ${r.status_aprovacao === 'PENDENTE'
+              ? `<input type="number" class="vb-liberar" min="0" step="1"
+                        value="${esc(r.sugestao_vb)}" aria-label="VB a liberar para ${esc(r.sku)}">`
+              : (r.vb_aprovado != null ? `<strong>${esc(r.vb_aprovado)}</strong>` : '—')}
+          </td>
+          <td class="td-editavel" data-label="Motivo do ajuste">
+            ${r.status_aprovacao === 'PENDENTE'
+              ? `<input type="text" class="motivo-ajuste" maxlength="500"
+                        placeholder="Opcional — só se mudar o VB"
+                        aria-label="Motivo do ajuste para ${esc(r.sku)}">`
+              : (r.comentario_bia ? `<div class="sug-comentario sug-comentario-bia">${esc(r.comentario_bia)}</div>` : '—')}
+          </td>
           <td class="td-num" data-label="Und / mês">${fmtMedia(r.media_mensal)}</td>
           <td data-label="Status">
             <span class="badge ${STATUS_SUG_BADGE[r.status_aprovacao] || 'badge-gray'}">${esc(rotuloDecisao(r))}</span>
-            ${ajusteHtml(r)}
             ${r.decidido_em ? `<div class="decidido">${fmtData(r.decidido_em)}</div>` : ''}
           </td>
           <td class="td-acoes">
             ${r.status_aprovacao === 'PENDENTE' ? `
               <div class="acao-wrap">
-                <button class="btn-aprovar" title="Aprovar o VB que o rep pediu" data-acao="APROVADA">
+                <button class="btn-aprovar" title="Aprovar liberando o VB da coluna ao lado" data-acao="APROVADA">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>
-                </button>
-                <button class="btn-ajustar" title="Aprovar com outro VB">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>
                 </button>
                 <button class="btn-recusar" title="Recusar" data-acao="RECUSADA">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
@@ -1188,35 +1197,28 @@
               </div>` : '—'}
           </td>
         </tr>
-        ${r.status_aprovacao === 'PENDENTE' ? `
-        <tr class="linha-ajuste" data-ajuste-de="${r.id}">
-          <td colspan="11">
-            <div class="ajuste-box">
-              <label class="ajuste-campo">
-                <span>VB a liberar</span>
-                <input type="number" class="ajuste-vb" min="0" step="1" value="${esc(r.sugestao_vb)}">
-              </label>
-              <label class="ajuste-campo ajuste-campo-larga">
-                <span>Motivo <span class="rotulo-opcional">opcional</span></span>
-                <input type="text" class="ajuste-comentario" maxlength="500"
-                       placeholder="Por que esse valor, e não o que o rep pediu?">
-              </label>
-              <div class="ajuste-acoes">
-                <button class="btn btn-ghost ajuste-cancelar">Cancelar</button>
-                <button class="btn btn-success ajuste-confirmar">Aprovar com este VB</button>
-              </div>
-            </div>
-          </td>
-        </tr>` : ''}
       `).join('');
 
-      // uma única função decide tudo: aprovar direto, aprovar ajustando e
-      // recusar só mudam o corpo do PATCH
-      const decidir = async (tr, acao, botao, extras = {}) => {
-        const id = tr.dataset.id;
+      // Aprovar sempre manda o VB que está na coluna editável — se o BI&A não
+      // encostou nela, é o mesmo que o rep pediu e o servidor grava APROVADA;
+      // se mudou, o servidor deriva PARCIAL. Uma ação só, sem modo separado.
+      const decidir = async (tr, acao, botao) => {
+        const extras = {};
+        if (acao === 'APROVADA') {
+          const campoVb = tr.querySelector('.vb-liberar');
+          const vb = Number(campoVb?.value);
+          if (!Number.isInteger(vb) || vb < 0) {
+            toast('Informe um VB inteiro maior ou igual a zero na coluna "VB a liberar".', true);
+            campoVb?.focus();
+            return;
+          }
+          extras.vb_aprovado = vb;
+          const motivo = tr.querySelector('.motivo-ajuste')?.value.trim();
+          if (motivo) extras.comentario_bia = motivo;
+        }
         botao.disabled = true;
         try {
-          const r = await api(`/api/sugestoes/${id}`, {
+          const r = await api(`/api/sugestoes/${tr.dataset.id}`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ acao, ...extras }),
@@ -1225,7 +1227,7 @@
           toast(acao === 'RECUSADA'
             ? `Sugestão de ${quem} recusada.`
             : r.status_aprovacao === 'PARCIAL'
-              ? `Sugestão de ${quem} aprovada com VB ${r.vb_aprovado} (pediu ${r.sugestao_vb}).`
+              ? `Sugestão de ${quem} aprovada liberando ${r.vb_aprovado} (pediu ${r.sugestao_vb}).`
               : `Sugestão de ${quem} aprovada.`);
           carregarAprovacoes();
         } catch (e) {
@@ -1234,44 +1236,25 @@
         }
       };
 
-      const linhaAjuste = (tr) => body.querySelector(`.linha-ajuste[data-ajuste-de="${tr.dataset.id}"]`);
-
       body.querySelectorAll('.btn-aprovar, .btn-recusar').forEach((btn) =>
         btn.addEventListener('click', () =>
           decidir(btn.closest('tr'), btn.dataset.acao, btn)));
 
-      body.querySelectorAll('.btn-ajustar').forEach((btn) =>
-        btn.addEventListener('click', () => {
-          const alvo = linhaAjuste(btn.closest('tr'));
-          if (!alvo) return;
-          // só um painel aberto por vez — evita o BI&A perder de vista qual
-          // linha está editando numa fila longa
-          body.querySelectorAll('.linha-ajuste.aberta').forEach((l) => {
-            if (l !== alvo) l.classList.remove('aberta');
-          });
-          alvo.classList.toggle('aberta');
-          if (alvo.classList.contains('aberta')) alvo.querySelector('.ajuste-vb').focus();
-        }));
-
-      body.querySelectorAll('.ajuste-cancelar').forEach((btn) =>
-        btn.addEventListener('click', () => btn.closest('.linha-ajuste').classList.remove('aberta')));
-
-      body.querySelectorAll('.ajuste-confirmar').forEach((btn) =>
-        btn.addEventListener('click', () => {
-          const painel = btn.closest('.linha-ajuste');
-          const tr = body.querySelector(`tr[data-id="${painel.dataset.ajusteDe}"]`);
-          const vb = Number(painel.querySelector('.ajuste-vb').value);
-          if (!Number.isInteger(vb) || vb < 0) {
-            toast('Informe um VB inteiro maior ou igual a zero.', true);
-            return;
-          }
-          decidir(tr, 'APROVADA', btn, {
-            vb_aprovado: vb,
-            comentario_bia: painel.querySelector('.ajuste-comentario').value.trim() || undefined,
-          });
-        }));
+      // marca visualmente a linha cujo VB foi alterado, para o BI&A enxergar
+      // de relance o que vai sair diferente do pedido
+      body.querySelectorAll('.vb-liberar').forEach((campo) => {
+        const pedido = campo.value;
+        campo.addEventListener('input', () =>
+          campo.classList.toggle('alterado', campo.value !== pedido));
+        // Enter aprova a linha — fila longa se percorre pelo teclado
+        campo.addEventListener('keydown', (ev) => {
+          if (ev.key !== 'Enter') return;
+          ev.preventDefault();
+          campo.closest('tr').querySelector('.btn-aprovar')?.click();
+        });
+      });
     } catch (e) {
-      body.innerHTML = `<tr><td colspan="11" style="text-align:center;color:var(--error);padding:28px">${esc(e.message)}</td></tr>`;
+      body.innerHTML = `<tr><td colspan="13" style="text-align:center;color:var(--error);padding:28px">${esc(e.message)}</td></tr>`;
     }
   };
 

@@ -322,8 +322,9 @@ app.get('/api/dashboard', auth(['admin']), asyncRoute(async (_req, res) => {
     SELECT
       (SELECT COUNT(*) FROM trade_fv.sugestao_fv
         WHERE status_aprovacao = 'PENDENTE')                       AS pendentes,
+      -- PARCIAL conta como aprovada: o VB foi liberado, só que ajustado
       (SELECT COUNT(*) FROM trade_fv.sugestao_fv
-        WHERE status_aprovacao = 'APROVADA'
+        WHERE status_aprovacao IN ('APROVADA','PARCIAL')
           AND decidido_em >= date_trunc('month', now()))           AS aprovadas_mes,
       (SELECT COUNT(*) FROM trade_fv.usuario
         WHERE role = 'rep' AND ativo)                              AS reps_ativos,
@@ -467,14 +468,14 @@ app.get('/api/pdv/:cnpj', auth(), asyncRoute(async (req, res) => {
     // ele mesmo enviou); rep não vê histórico (nem o próprio)
     req.role === 'admin' ? pool.query(`
       SELECT "EAN" AS ean, "SKU" AS sku, "Sugestao VB" AS sugestao_vb,
-             "Representante" AS representante, status_aprovacao,
+             vb_aprovado, "Representante" AS representante, status_aprovacao,
              created_at, decidido_em
       FROM trade_fv.sugestao_fv
       WHERE "CNPJ" = $1
       ORDER BY created_at DESC
     `, [cnpj]) : isGr ? pool.query(`
       SELECT "EAN" AS ean, "SKU" AS sku, "Sugestao VB" AS sugestao_vb,
-             "Representante" AS representante, status_aprovacao,
+             vb_aprovado, "Representante" AS representante, status_aprovacao,
              created_at, decidido_em
       FROM trade_fv.sugestao_fv
       WHERE "CNPJ" = $1 AND ("Representante" = ANY($2::text[]) OR "Representante" = $3)
@@ -884,7 +885,7 @@ const montarFiltroSugestoes = async (req) => {
     }
   }
   if (cnpj) { params.push(cnpj); where.push(`s."CNPJ" = $${params.length}`); }
-  if (['PENDENTE', 'APROVADA', 'RECUSADA'].includes(status)) {
+  if (['PENDENTE', 'APROVADA', 'PARCIAL', 'RECUSADA'].includes(status)) {
     params.push(status); where.push(`s.status_aprovacao = $${params.length}`);
   }
   // O banco roda em UTC, mas a tela mostra/pensa a data em horário de Brasília
@@ -904,7 +905,8 @@ const SQL_SUGESTOES_SELECT = `
          s."Estoque Ideal" AS estoque_ideal, s."Sugestao VB" AS sugestao_vb,
          uni."Média Mensal" AS media_mensal,
          s."Representante" AS representante, s.status_aprovacao,
-         s.created_at, s.decidido_por, s.decidido_em, s.comentario
+         s.created_at, s.decidido_por, s.decidido_em, s.comentario,
+         s.vb_aprovado, s.comentario_bia
   FROM trade_fv.sugestao_fv s
   LEFT JOIN tdd.dim_pdv p ON p."CNPJ_PDV" = s."CNPJ"
   LEFT JOIN trade_fv.fato_adequacao_estoque_unpivot uni
@@ -927,8 +929,14 @@ app.get('/api/sugestoes', auth(), asyncRoute(async (req, res) => {
 // GET /api/sugestoes/exportar — .xlsx formatado, respeitando os MESMOS filtros
 // de GET /api/sugestoes (rep=/cnpj=/status=/data_de=/data_ate=[&all=1, admin]).
 // ----------------------------------------------------------------------------
-const STATUS_LABEL_SRV = { PENDENTE: 'Em análise', APROVADA: 'Atendido', RECUSADA: 'Inviável' };
-const STATUS_FILL_SRV = { PENDENTE: 'FFFFF3CD', APROVADA: 'FFD4F4DD', RECUSADA: 'FFFDE0E0' };
+const STATUS_LABEL_SRV = {
+  PENDENTE: 'Em análise', APROVADA: 'Atendido',
+  PARCIAL: 'Atendido parcial', RECUSADA: 'Inviável',
+};
+const STATUS_FILL_SRV = {
+  PENDENTE: 'FFFFF3CD', APROVADA: 'FFD4F4DD',
+  PARCIAL: 'FFDCEBFB', RECUSADA: 'FFFDE0E0',
+};
 
 const formatarCnpjSrv = (c) => {
   const d = String(c || '').padStart(14, '0');
@@ -966,9 +974,11 @@ app.get('/api/sugestoes/exportar', auth(['admin', 'gr']), asyncRoute(async (req,
     { header: 'Estoque Atual', key: 'estoque', width: 14 },
     { header: 'VB Sugerido BI', key: 'vb_bi', width: 15 },
     { header: 'VB Sugerido REP', key: 'vb_rep', width: 16 },
+    { header: 'VB Aprovado', key: 'vb_aprovado', width: 14 },
     { header: 'Und/mês', key: 'media', width: 12 },
-    { header: 'Status', key: 'status', width: 14 },
+    { header: 'Status', key: 'status', width: 16 },
     { header: 'Comentário do rep', key: 'comentario', width: 52 },
+    { header: 'Comentário do BI&A', key: 'comentario_bia', width: 52 },
   ];
 
   rows.forEach((r) => {
@@ -984,14 +994,16 @@ app.get('/api/sugestoes/exportar', auth(['admin', 'gr']), asyncRoute(async (req,
       estoque: r.estoque_atual != null ? Number(r.estoque_atual) : null,
       vb_bi: r.estoque_ideal != null ? Number(r.estoque_ideal) : null,
       vb_rep: Number(r.sugestao_vb),
+      vb_aprovado: r.vb_aprovado != null ? Number(r.vb_aprovado) : null,
       media: r.media_mensal != null ? Number(r.media_mensal) : null,
       status: STATUS_LABEL_SRV[r.status_aprovacao] || r.status_aprovacao,
       comentario: r.comentario || '',
+      comentario_bia: r.comentario_bia || '',
     });
   });
 
   ws.getColumn('enviada').numFmt = 'dd/mm/yyyy hh:mm';
-  ['estoque', 'vb_bi', 'vb_rep'].forEach((k) => { ws.getColumn(k).numFmt = '0'; });
+  ['estoque', 'vb_bi', 'vb_rep', 'vb_aprovado'].forEach((k) => { ws.getColumn(k).numFmt = '0'; });
   ws.getColumn('media').numFmt = '0.0';
 
   // cabeçalho: fundo roxo da marca (--primary-600), texto branco, negrito
@@ -1016,11 +1028,13 @@ app.get('/api/sugestoes/exportar', auth(['admin', 'gr']), asyncRoute(async (req,
     statusCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: STATUS_FILL_SRV[r.status_aprovacao] || zebra } };
     statusCell.font = { bold: true };
     statusCell.alignment = { vertical: 'middle', horizontal: 'center' };
-    // comentário é texto livre: quebra linha em vez de vazar pela planilha
-    row.getCell('comentario').alignment = { vertical: 'top', horizontal: 'left', wrapText: true };
+    // comentários são texto livre: quebram linha em vez de vazar pela planilha
+    ['comentario', 'comentario_bia'].forEach((k) => {
+      row.getCell(k).alignment = { vertical: 'top', horizontal: 'left', wrapText: true };
+    });
   });
 
-  ws.autoFilter = { from: 'A1', to: 'N1' };
+  ws.autoFilter = { from: 'A1', to: 'P1' };
 
   const nomeArquivo = `indicacoes_${new Date().toISOString().slice(0, 10)}.xlsx`;
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
@@ -1030,7 +1044,14 @@ app.get('/api/sugestoes/exportar', auth(['admin', 'gr']), asyncRoute(async (req,
 }));
 
 // ----------------------------------------------------------------------------
-// PATCH /api/sugestoes/:id — { acao: 'APROVADA' | 'RECUSADA' } (admin/BI&A)
+// PATCH /api/sugestoes/:id — decisão do BI&A (admin)
+//   { acao: 'APROVADA' | 'RECUSADA', vb_aprovado?: int, comentario_bia?: str }
+//
+// APROVAÇÃO PARCIAL: quando `vb_aprovado` vem e difere do que o rep pediu, o
+// status gravado é PARCIAL — o cliente não escolhe esse status, o servidor
+// deriva da comparação. Isso evita a linha inconsistente (PARCIAL com o mesmo
+// valor, ou APROVADA com valor trocado). O pedido original do rep fica
+// intacto em "Sugestao VB"; quem vale para a sugestão oficial é vb_aprovado.
 // ----------------------------------------------------------------------------
 app.patch('/api/sugestoes/:id', auth(['admin']), asyncRoute(async (req, res) => {
   const id = Number(req.params.id);
@@ -1039,18 +1060,40 @@ app.patch('/api/sugestoes/:id', auth(['admin']), asyncRoute(async (req, res) => 
     return res.status(400).json({ error: 'Ação inválida. Use APROVADA ou RECUSADA.' });
   }
 
+  // VB liberado pelo BI&A. Ausente = libera exatamente o que o rep pediu.
+  const temVb = req.body?.vb_aprovado !== undefined && req.body?.vb_aprovado !== null
+    && req.body?.vb_aprovado !== '';
+  const vbAprovado = temVb ? Number(req.body.vb_aprovado) : null;
+  if (temVb && (!Number.isInteger(vbAprovado) || vbAprovado < 0)) {
+    return res.status(400).json({ error: 'VB aprovado deve ser um inteiro ≥ 0.' });
+  }
+  if (acao === 'RECUSADA' && temVb) {
+    return res.status(400).json({ error: 'Recusa não define VB. Para liberar um valor menor, aprove informando o VB.' });
+  }
+  const comentarioBia = String(req.body?.comentario_bia ?? '').trim().slice(0, 500) || null;
+
   // registra QUEM decidiu (mesmo formato do modo BI&A no POST): "BI&A (Nome)"
   const decididoPor = `BI&A (${req.sessao.nome || req.sessao.usuario})`;
   const { rows } = await pool.query(`
     UPDATE trade_fv.sugestao_fv
-    SET status_aprovacao = $1,
+    SET status_aprovacao = CASE
+          WHEN $1 = 'RECUSADA'                                   THEN 'RECUSADA'
+          WHEN $4::int IS NULL OR $4::int = "Sugestao VB"         THEN 'APROVADA'
+          ELSE 'PARCIAL'
+        END,
+        vb_aprovado = CASE
+          WHEN $1 = 'RECUSADA' THEN NULL
+          ELSE COALESCE($4::int, "Sugestao VB")
+        END,
+        comentario_bia = $5,
         decidido_por = $2,
         decidido_em = now(),
         updated_at = now()
     WHERE id = $3 AND status_aprovacao = 'PENDENTE'
     RETURNING id, "CNPJ" AS cnpj, "SKU" AS sku, "Sugestao VB" AS sugestao_vb,
+              vb_aprovado, comentario_bia,
               "Representante" AS representante, status_aprovacao, decidido_em
-  `, [acao, decididoPor, id]);
+  `, [acao, decididoPor, id, vbAprovado, comentarioBia]);
 
   if (!rows.length) {
     return res.status(404).json({ error: 'Sugestão não encontrada ou já decidida.' });

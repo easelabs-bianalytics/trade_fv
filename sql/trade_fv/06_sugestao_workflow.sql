@@ -2,9 +2,18 @@
 --  WORKFLOW DE APROVACAO das sugestoes da Forca de Vendas (BI&A)
 --
 --  1) trade_fv.sugestao_fv ganha o ciclo de aprovacao:
---       - status_aprovacao: PENDENTE (default) | APROVADA | RECUSADA
+--       - status_aprovacao: PENDENTE (default) | APROVADA | PARCIAL | RECUSADA
 --       - decidido_por / decidido_em: quem (BI&A) e quando decidiu
 --       - created_at = data de envio da sugestao (ja existia)
+--       - vb_aprovado: APROVACAO PARCIAL -- o VB que o BI&A de fato liberou,
+--         quando difere do que o rep pediu (ex.: rep pediu 2, BI&A aceitou 1).
+--         "Sugestao VB" continua guardando o PEDIDO do rep, intacto; quem vale
+--         para a sugestao oficial e COALESCE(vb_aprovado, "Sugestao VB").
+--         Status PARCIAL = decidido com valor diferente do pedido (para menos
+--         ou para mais); APROVADA = liberado exatamente o que foi pedido.
+--       - comentario_bia: motivo opcional do BI&A ao ajustar o valor. Fecha o
+--         ciclo com o `comentario` do rep (ver 11_comentario_sugestao.sql):
+--         ele justifica o pedido, o BI&A justifica o corte.
 --     O rep NAO pode ter 2 sugestoes PENDENTES para o mesmo CNPJ x SKU
 --     (indice unico parcial). Apos decisao (aprovada/recusada) ele pode enviar
 --     uma nova sugestao — o historico fica preservado em linhas separadas.
@@ -23,13 +32,39 @@
 ALTER TABLE trade_fv.sugestao_fv
     ADD COLUMN IF NOT EXISTS status_aprovacao TEXT NOT NULL DEFAULT 'PENDENTE',
     ADD COLUMN IF NOT EXISTS decidido_por TEXT,
-    ADD COLUMN IF NOT EXISTS decidido_em TIMESTAMPTZ;
+    ADD COLUMN IF NOT EXISTS decidido_em TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS vb_aprovado INTEGER,
+    ADD COLUMN IF NOT EXISTS comentario_bia TEXT;
 
-DO $$ BEGIN
-    ALTER TABLE trade_fv.sugestao_fv
-        ADD CONSTRAINT ck_sugestao_fv_status
-        CHECK (status_aprovacao IN ('PENDENTE','APROVADA','RECUSADA'));
-EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+-- DROP + ADD (e nao o DO/EXCEPTION de antes): o conjunto de status mudou com a
+-- aprovacao parcial, e um ADD que engole "duplicate_object" manteria a versao
+-- velha do CHECK em bancos que ja rodaram este arquivo.
+ALTER TABLE trade_fv.sugestao_fv DROP CONSTRAINT IF EXISTS ck_sugestao_fv_status;
+ALTER TABLE trade_fv.sugestao_fv
+    ADD CONSTRAINT ck_sugestao_fv_status
+    CHECK (status_aprovacao IN ('PENDENTE','APROVADA','PARCIAL','RECUSADA'));
+
+-- vb_aprovado so existe em linha decidida com aprovacao (total ou parcial), e
+-- nunca negativo -- mesma regra do "Sugestao VB".
+ALTER TABLE trade_fv.sugestao_fv DROP CONSTRAINT IF EXISTS ck_sugestao_fv_vb_aprovado;
+ALTER TABLE trade_fv.sugestao_fv
+    ADD CONSTRAINT ck_sugestao_fv_vb_aprovado
+    CHECK (
+        vb_aprovado IS NULL
+        OR (vb_aprovado >= 0 AND status_aprovacao IN ('APROVADA','PARCIAL'))
+    );
+
+-- PARCIAL sem vb_aprovado seria uma linha que diz "mudei o valor" sem dizer
+-- para quanto -- a view cairia de volta no pedido do rep, silenciosamente.
+ALTER TABLE trade_fv.sugestao_fv DROP CONSTRAINT IF EXISTS ck_sugestao_fv_parcial_exige_vb;
+ALTER TABLE trade_fv.sugestao_fv
+    ADD CONSTRAINT ck_sugestao_fv_parcial_exige_vb
+    CHECK (status_aprovacao <> 'PARCIAL' OR vb_aprovado IS NOT NULL);
+
+ALTER TABLE trade_fv.sugestao_fv DROP CONSTRAINT IF EXISTS ck_sugestao_fv_comentario_bia;
+ALTER TABLE trade_fv.sugestao_fv
+    ADD CONSTRAINT ck_sugestao_fv_comentario_bia
+    CHECK (comentario_bia IS NULL OR char_length(comentario_bia) BETWEEN 1 AND 500);
 
 -- o indice unico antigo (upsert) da lugar ao unico-parcial por PENDENTE
 DROP INDEX IF EXISTS trade_fv.ux_sugestao_fv_cnpj_ean_rep;
@@ -45,13 +80,19 @@ CREATE INDEX IF NOT EXISTS ix_sugestao_fv_status
 -- --------------------------------------------------------------------------------
 CREATE OR REPLACE VIEW trade_fv.fato_adequacao_estoque_unpivot_ajustada AS
 WITH aprovadas AS (
-    -- ultima sugestao APROVADA por CNPJ x SKU (independente do representante)
+    -- ultima sugestao liberada por CNPJ x SKU (independente do representante).
+    -- PARCIAL entra junto com APROVADA: as duas liberam VB para a sugestao
+    -- oficial, a diferenca e so o valor valer ser o do BI&A ou o do rep.
     SELECT DISTINCT ON ("CNPJ", "EAN")
         "CNPJ", "Rede", "CAT", "Ultima Venda (dias)", "SKU", "Cobertura FV",
         "Status", "Estoque Atual", "Estoque Ideal", "EAN",
-        "Sugestao VB", "Representante"
+        -- o que vale para o downstream: o valor decidido pelo BI&A quando ele
+        -- ajustou, senao o proprio pedido do rep (APROVADA e as 25 linhas
+        -- antigas, anteriores a esta coluna, que tem vb_aprovado NULL)
+        COALESCE(vb_aprovado, "Sugestao VB") AS "Sugestao VB",
+        "Representante"
     FROM trade_fv.sugestao_fv
-    WHERE status_aprovacao = 'APROVADA'
+    WHERE status_aprovacao IN ('APROVADA','PARCIAL')
     ORDER BY "CNPJ", "EAN", decidido_em DESC NULLS LAST
 ),
 combinada AS (

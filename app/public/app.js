@@ -128,13 +128,28 @@
   const STATUS_SUG_BADGE = {
     'PENDENTE': 'badge-warning',
     'APROVADA': 'badge-green',
+    'PARCIAL': 'badge-primary',
     'RECUSADA': 'badge-error',
   };
   const STATUS_SUG_LABEL = {
     'PENDENTE': 'Em análise',
     'APROVADA': 'Atendido',
+    'PARCIAL': 'Atendido parcial',
     'RECUSADA': 'Inviável',
   };
+  // PARCIAL cobre corte e ampliação; o rótulo segue os números, não o status
+  const rotuloDecisao = (r) => r.status_aprovacao === 'PARCIAL' && r.vb_aprovado != null
+    ? (Number(r.vb_aprovado) > Number(r.sugestao_vb) ? 'Atendido acima' : 'Atendido parcial')
+    : (STATUS_SUG_LABEL[r.status_aprovacao] || r.status_aprovacao);
+
+  // "pediu 2 · liberado 1" — só quando o BI&A mexeu no número
+  const ajusteHtml = (r) => r.status_aprovacao === 'PARCIAL' && r.vb_aprovado != null
+    ? `<div class="decidido">pediu ${esc(r.sugestao_vb)} · liberado <strong>${esc(r.vb_aprovado)}</strong></div>`
+    : '';
+
+  const comentarioBiaHtml = (r) => r.comentario_bia
+    ? `<div class="sug-comentario sug-comentario-bia" title="${esc(r.comentario_bia)}">BI&A: ${esc(r.comentario_bia)}</div>`
+    : '';
 
   const toast = (msg, isError = false, duracao = 5200) => {
     document.querySelectorAll('.toast').forEach((t) => t.remove());
@@ -1029,7 +1044,7 @@
       const qs = isGr ? filtrosSugestoesQS() : new URLSearchParams();
       const rows = await api(`/api/sugestoes${qs.toString() ? '?' + qs : ''}`);
       const pend = rows.filter((r) => r.status_aprovacao === 'PENDENTE').length;
-      const apr = rows.filter((r) => r.status_aprovacao === 'APROVADA').length;
+      const apr = rows.filter((r) => ['APROVADA', 'PARCIAL'].includes(r.status_aprovacao)).length;
       const statsHtml = rows.length
         ? `<span class="badge badge-gray">${rows.length} ${rows.length === 1 ? 'sugestão' : 'sugestões'}</span>` +
           (pend ? ` <span class="badge badge-warning">${pend} em análise</span>` : '') +
@@ -1043,14 +1058,17 @@
         <tr>
           <td class="td-num" data-label="Enviada">${fmtData(r.created_at)}</td>
           ${isGr ? `<td data-label="Representante">${esc(repDisplay(r.representante))}</td>` : ''}
-          <td data-label="PDV">${esc(r.rede ? redeLabel(r.rede) : titleCase(r.nome_pdv || ''))}<div class="decidido">${fmtCNPJ(r.cnpj)}</div>${comentarioHtml(r)}</td>
+          <td data-label="PDV">${esc(r.rede ? redeLabel(r.rede) : titleCase(r.nome_pdv || ''))}<div class="decidido">${fmtCNPJ(r.cnpj)}</div>${comentarioHtml(r)}${comentarioBiaHtml(r)}</td>
           <td data-label="Cidade">${esc(titleCase(r.cidade || '—'))}${r.uf ? '/' + esc(r.uf) : ''}</td>
           <td data-label="SKU">${esc(r.sku)}</td>
           <td class="td-num" data-label="Estq. atual">${r.estoque_atual ?? '—'}</td>
           <td class="td-num" data-label="VB sugerido BI">${r.estoque_ideal ?? '—'}</td>
           <td class="td-num" data-label="${isGr ? 'VB Sugerido REP' : 'Meu VB'}"><strong>${esc(r.sugestao_vb)}</strong></td>
           <td class="td-num" data-label="Und / mês">${fmtMedia(r.media_mensal)}</td>
-          <td data-label="Status"><span class="badge ${STATUS_SUG_BADGE[r.status_aprovacao] || 'badge-gray'}">${esc(STATUS_SUG_LABEL[r.status_aprovacao] || r.status_aprovacao)}</span></td>
+          <td data-label="Status">
+            <span class="badge ${STATUS_SUG_BADGE[r.status_aprovacao] || 'badge-gray'}">${esc(rotuloDecisao(r))}</span>
+            ${ajusteHtml(r)}
+          </td>
         </tr>
       `).join('');
     } catch (e) {
@@ -1143,7 +1161,7 @@
         <tr data-id="${r.id}">
           <td class="td-num" data-label="Enviada">${fmtData(r.created_at)}</td>
           <td data-label="Representante">${esc(repDisplay(r.representante))}</td>
-          <td data-label="PDV">${esc(r.rede ? redeLabel(r.rede) : titleCase(r.nome_pdv || ''))}<div class="decidido">${fmtCNPJ(r.cnpj)}</div>${comentarioHtml(r)}</td>
+          <td data-label="PDV">${esc(r.rede ? redeLabel(r.rede) : titleCase(r.nome_pdv || ''))}<div class="decidido">${fmtCNPJ(r.cnpj)}</div>${comentarioHtml(r)}${comentarioBiaHtml(r)}</td>
           <td data-label="Rede">${esc(r.rede ? redeLabel(r.rede) : '—')}</td>
           <td data-label="SKU">${esc(r.sku)}</td>
           <td class="td-num" data-label="Estq. atual">${r.estoque_atual ?? '—'}</td>
@@ -1151,14 +1169,18 @@
           <td class="td-num" data-label="VB do rep"><strong>${esc(r.sugestao_vb)}</strong></td>
           <td class="td-num" data-label="Und / mês">${fmtMedia(r.media_mensal)}</td>
           <td data-label="Status">
-            <span class="badge ${STATUS_SUG_BADGE[r.status_aprovacao] || 'badge-gray'}">${esc(STATUS_SUG_LABEL[r.status_aprovacao] || r.status_aprovacao)}</span>
+            <span class="badge ${STATUS_SUG_BADGE[r.status_aprovacao] || 'badge-gray'}">${esc(rotuloDecisao(r))}</span>
+            ${ajusteHtml(r)}
             ${r.decidido_em ? `<div class="decidido">${fmtData(r.decidido_em)}</div>` : ''}
           </td>
           <td class="td-acoes">
             ${r.status_aprovacao === 'PENDENTE' ? `
               <div class="acao-wrap">
-                <button class="btn-aprovar" title="Aprovar" data-acao="APROVADA">
+                <button class="btn-aprovar" title="Aprovar o VB que o rep pediu" data-acao="APROVADA">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>
+                </button>
+                <button class="btn-ajustar" title="Aprovar com outro VB">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>
                 </button>
                 <button class="btn-recusar" title="Recusar" data-acao="RECUSADA">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
@@ -1166,26 +1188,87 @@
               </div>` : '—'}
           </td>
         </tr>
+        ${r.status_aprovacao === 'PENDENTE' ? `
+        <tr class="linha-ajuste" data-ajuste-de="${r.id}">
+          <td colspan="11">
+            <div class="ajuste-box">
+              <label class="ajuste-campo">
+                <span>VB a liberar</span>
+                <input type="number" class="ajuste-vb" min="0" step="1" value="${esc(r.sugestao_vb)}">
+              </label>
+              <label class="ajuste-campo ajuste-campo-larga">
+                <span>Motivo <span class="rotulo-opcional">opcional</span></span>
+                <input type="text" class="ajuste-comentario" maxlength="500"
+                       placeholder="Por que esse valor, e não o que o rep pediu?">
+              </label>
+              <div class="ajuste-acoes">
+                <button class="btn btn-ghost ajuste-cancelar">Cancelar</button>
+                <button class="btn btn-success ajuste-confirmar">Aprovar com este VB</button>
+              </div>
+            </div>
+          </td>
+        </tr>` : ''}
       `).join('');
 
+      // uma única função decide tudo: aprovar direto, aprovar ajustando e
+      // recusar só mudam o corpo do PATCH
+      const decidir = async (tr, acao, botao, extras = {}) => {
+        const id = tr.dataset.id;
+        botao.disabled = true;
+        try {
+          const r = await api(`/api/sugestoes/${id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ acao, ...extras }),
+          });
+          const quem = `${repDisplay(r.representante)} (${r.sku})`;
+          toast(acao === 'RECUSADA'
+            ? `Sugestão de ${quem} recusada.`
+            : r.status_aprovacao === 'PARCIAL'
+              ? `Sugestão de ${quem} aprovada com VB ${r.vb_aprovado} (pediu ${r.sugestao_vb}).`
+              : `Sugestão de ${quem} aprovada.`);
+          carregarAprovacoes();
+        } catch (e) {
+          toast(e.message, true);
+          botao.disabled = false;
+        }
+      };
+
+      const linhaAjuste = (tr) => body.querySelector(`.linha-ajuste[data-ajuste-de="${tr.dataset.id}"]`);
+
       body.querySelectorAll('.btn-aprovar, .btn-recusar').forEach((btn) =>
-        btn.addEventListener('click', async () => {
-          const tr = btn.closest('tr');
-          const id = tr.dataset.id;
-          const acao = btn.dataset.acao;
-          btn.disabled = true;
-          try {
-            const r = await api(`/api/sugestoes/${id}`, {
-              method: 'PATCH',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ acao }),
-            });
-            toast(`Sugestão de ${repDisplay(r.representante)} (${r.sku}) ${acao === 'APROVADA' ? 'aprovada' : 'recusada'}.`);
-            carregarAprovacoes();
-          } catch (e) {
-            toast(e.message, true);
-            btn.disabled = false;
+        btn.addEventListener('click', () =>
+          decidir(btn.closest('tr'), btn.dataset.acao, btn)));
+
+      body.querySelectorAll('.btn-ajustar').forEach((btn) =>
+        btn.addEventListener('click', () => {
+          const alvo = linhaAjuste(btn.closest('tr'));
+          if (!alvo) return;
+          // só um painel aberto por vez — evita o BI&A perder de vista qual
+          // linha está editando numa fila longa
+          body.querySelectorAll('.linha-ajuste.aberta').forEach((l) => {
+            if (l !== alvo) l.classList.remove('aberta');
+          });
+          alvo.classList.toggle('aberta');
+          if (alvo.classList.contains('aberta')) alvo.querySelector('.ajuste-vb').focus();
+        }));
+
+      body.querySelectorAll('.ajuste-cancelar').forEach((btn) =>
+        btn.addEventListener('click', () => btn.closest('.linha-ajuste').classList.remove('aberta')));
+
+      body.querySelectorAll('.ajuste-confirmar').forEach((btn) =>
+        btn.addEventListener('click', () => {
+          const painel = btn.closest('.linha-ajuste');
+          const tr = body.querySelector(`tr[data-id="${painel.dataset.ajusteDe}"]`);
+          const vb = Number(painel.querySelector('.ajuste-vb').value);
+          if (!Number.isInteger(vb) || vb < 0) {
+            toast('Informe um VB inteiro maior ou igual a zero.', true);
+            return;
           }
+          decidir(tr, 'APROVADA', btn, {
+            vb_aprovado: vb,
+            comentario_bia: painel.querySelector('.ajuste-comentario').value.trim() || undefined,
+          });
         }));
     } catch (e) {
       body.innerHTML = `<tr><td colspan="11" style="text-align:center;color:var(--error);padding:28px">${esc(e.message)}</td></tr>`;

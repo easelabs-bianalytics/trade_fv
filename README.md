@@ -14,7 +14,10 @@ disponíveis como **views/materialized views** consultáveis por qualquer ferram
 
 ## 1. Visão geral
 
-- **Banco:** PostgreSQL 17 (hospedado no Railway).
+- **Produção:** **https://trade-fv.easelabs.app.br** — app no ar na AWS (ECS Fargate, cluster
+  `cockpit-prod-cluster`, região `sa-east-1`).
+- **Banco:** **Amazon RDS for PostgreSQL 16** (instância `cockpit-prod-db`, banco `easelabs`).
+  Mesmo dialeto do Postgres que rodava antes; o RDS **não é público** (ver [Conexão](#conexão)).
 - **Schema principal:** `trade_fv`.
 - **SKUs (apresentações) do produto (canabidiol EaseLabs):**
   | Apresentação | EAN |
@@ -25,13 +28,47 @@ disponíveis como **views/materialized views** consultáveis por qualquer ferram
   | Extrato | 7896806601250 |
 - **Redes atendidas:** ARAUJO, CLAMED, DPSP, DROGAL, INDIANA, PAGUEMENOS, PANVEL, RAIA, SAOJOAO, VENANCIO.
 
+### Migração Railway → AWS (concluída)
+
+O projeto rodava no **Railway** (banco + app + cron). **Tudo migrou para a AWS e o Railway foi
+desligado** — nenhuma referência a ele vale mais como instrução operacional; onde o texto abaixo
+cita o Railway, é histórico. O banco `easelabs` no RDS é hoje a única fonte de verdade: dados de
+`sugestao_fv` e `usuario` foram copiados e conferidos linha a linha contra a origem.
+
+O trabalho de infra (ECS, ALB, ECR, secrets, agendamento) vive no repo **`sales_force_crm`**, em
+Terraform — ver [Deploy e infraestrutura](#13-deploy-e-infraestrutura-aws).
+
 ### Conexão
+
+O RDS fica em subnet privada: **não há host público**. O acesso é por **port-forward via SSM**
+através de uma task ECS, e enquanto o túnel estiver aberto o banco responde em `127.0.0.1:15432`.
+
+```bash
+# abre o túnel (SÓ funciona no WSL — ver cabeçalho do script) e DEIXE RODANDO
+wsl -e bash /mnt/d/Projetos/indicacao_pdvs_fv/app/abrir_tunel_wsl.sh
+# espere: "Port 15432 opened for sessionId ..."
+```
+
+Conecte sempre em `host=127.0.0.1` (não `localhost`: ele tenta IPv6 primeiro e falha),
+`port=15432`, `dbname=easelabs`, `sslmode=require`, `connect_timeout=15`.
+
 As credenciais ficam em `.env` (**não versionado** — ver `.gitignore`):
 ```
-DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASSWORD
+COCKPIT_DB_HOST, COCKPIT_DB_PORT, COCKPIT_DB_NAME, COCKPIT_DB_USER, COCKPIT_DB_PASS
+AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_DEFAULT_REGION, AWS_SSM_ROLE_ARN
 ```
-String de conexão equivalente:
-`postgresql://<DB_USER>:<DB_PASSWORD>@<DB_HOST>:<DB_PORT>/<DB_NAME>`
+
+Armadilhas que já custaram tempo:
+
+- **Credenciais do túnel duram ~1 h.** Ao expirar, o processo local continua escutando a porta:
+  a conexão TCP abre e a query fica pendurada para sempre. Use **sempre** `connect_timeout`; se
+  travar, mate o processo e reabra o túnel.
+- **Rodar o script em background pelo Windows não funciona** com `wsl -e bash -lc "... &"`: o WSL2
+  derruba a instância inteira quando o último processo em primeiro plano sai, e o túnel morre antes
+  de abrir a porta. Mantenha um processo WSL vivo em primeiro plano.
+- **`setval()` falha** (`permission denied for sequence`) — a role do app tem `USAGE` mas não
+  `UPDATE` nas sequences. Para cargas que preservam ids, avance com `nextval()` (só exige `USAGE`)
+  ou peça `GRANT UPDATE ON SEQUENCE`.
 
 ---
 
@@ -279,15 +316,21 @@ não tem chave única, então fica sem `CONCURRENTLY`.
 
 ---
 
-## 7. Agendamento no Railway
+## 7. Agendamento do refresh (AWS)
 
-`pg_cron` **não está disponível** neste Postgres, então o refresh roda via **Cron Job do Railway**.
+`pg_cron` **não está disponível** neste Postgres, então o refresh roda como **task avulsa no ECS
+Fargate**, disparada pelo **EventBridge Scheduler** — sem service, sem load balancer: sobe, roda o
+SQL e encerra (~1m30s).
 
-- **Build:** `Dockerfile` na raiz (imagem `postgres:17-alpine`, que já traz `psql`); o `CMD`
-  executa `sql/trade_fv/03_refresh.sql` e o container encerra (~1m30s).
-- **Variável:** `DATABASE_URL` referenciando o serviço Postgres do projeto
-  (`Add Reference → Postgres → DATABASE_URL`). **Sem quebra de linha no valor.**
-- **Cron Schedule** (Settings → Deploy): em **UTC**. Ex.: `0 9 * * *` = 06:00 BRT.
+- **Imagem:** `Dockerfile` na raiz (`postgres:17-alpine`, que já traz `psql`), publicada no ECR
+  `cockpit-prod-trade-fv-cron`. O `CMD` executa `sql/trade_fv/03_refresh.sql`.
+- **Credenciais:** `PGHOST`/`PGPORT`/`PGDATABASE`/`PGUSER`/`PGPASSWORD`, cada uma um secret
+  próprio no Secrets Manager (`cockpit-prod-trade-fv-db-*`), injetadas na task definition. O `psql`
+  lê essas variáveis nativamente — **não** montamos `DATABASE_URL` como string (convenção do
+  `sales_force_crm`: campos discretos, nunca DSN).
+- **Schedule:** `cockpit-prod-trade-fv-cron`, `cron(0 2 * * ? *)` em **UTC** (= 23:00 BRT do dia
+  anterior), `state = ENABLED`, 1 retry, idade máxima do evento 1 h.
+- **Logs:** CloudWatch, grupo de logs do cluster, stream prefix `trade-fv-cron`.
 - **Log de sucesso esperado:**
   ```
   SET
@@ -295,6 +338,10 @@ não tem chave única, então fica sem `CONCURRENTLY`.
   REFRESH MATERIALIZED VIEW
   REFRESH MATERIALIZED VIEW
   ```
+
+Tudo isso é definido em Terraform no repo `sales_force_crm`
+(`infra/modules/compute/trade_fv.tf` e `schedules.tf`) — ver
+[Deploy e infraestrutura](#13-deploy-e-infraestrutura-aws).
 
 ---
 
@@ -341,7 +388,7 @@ Comparação contra exports do Power BI (`fato_adequacao` e positivação PAGUEM
 
 ```
 .
-├── Dockerfile                 # Cron Job do Railway (psql + 03_refresh.sql)
+├── Dockerfile                 # imagem do cron de refresh (psql + 03_refresh.sql) → ECR cockpit-prod-trade-fv-cron
 ├── .gitignore                 # ignora .env, *.csv, node_modules
 ├── .env                       # credenciais (NÃO versionado)
 ├── sql/
@@ -357,6 +404,9 @@ Comparação contra exports do Power BI (`fato_adequacao` e positivação PAGUEM
 │       ├── 09_gr.sql
 │       └── 10_ajustada_pivot.sql
 ├── app/                       # Sistema web de indicação de PDVs (seção 11)
+│   ├── Dockerfile             # imagem do app web (node:20-alpine) → ECR cockpit-prod-trade-fv
+│   ├── .dockerignore
+│   ├── abrir_tunel_wsl.sh     # port-forward SSM até o RDS (127.0.0.1:15432) — só WSL
 │   ├── package.json
 │   ├── server.js              # Express + pg (API + estáticos)
 │   └── public/
@@ -829,8 +879,8 @@ com **32 representantes ativos**, 10 revisões/dia cada = **320 revisões/dia �
 
 Ou seja: mesmo a opção paga mais cara sai por menos de R$ 50/mês nesse volume. **A decisão
 não deveria ser por custo, e sim por operação** — manter o Ollama exige uma máquina ligada e
-acessível pelo servidor do Railway, o que hoje não existe. Se o app for para produção no
-Railway, a API paga é o caminho natural; o local serve bem para desenvolvimento e validação.
+alcançável pela task ECS em `sa-east-1`, o que hoje não existe. Com o app já em produção na AWS,
+a API paga é o caminho natural; o local serve bem para desenvolvimento e validação.
 
 > Números de preço são de tabela pública e mudam. Confirme antes de contratar.
 
@@ -926,10 +976,17 @@ npm start     # http://localhost:3000 (lê ../.env)
 cd app && npm install && npm start
 ```
 
-### Deploy no Railway
-Criar um serviço apontando para o repositório com **Root Directory = `app`** (Nixpacks
-detecta o `package.json`; start = `npm start`) e a variável `DATABASE_URL` referenciando
-o Postgres do projeto. O servidor usa `PORT` do ambiente automaticamente.
+### Deploy
+
+Em produção o app roda em **ECS Fargate** (`cockpit-prod-trade-fv-app-service`), atrás do ALB
+compartilhado, roteado por `host_header` para **https://trade-fv.easelabs.app.br**. A imagem sai
+de `app/Dockerfile` (`node:20-alpine`, porta 3000) e é publicada no ECR `cockpit-prod-trade-fv`.
+
+As credenciais chegam como **secrets da task definition** (`DB_HOST`, `DB_PORT`, `DB_NAME`,
+`DB_USER`, `DB_PASSWORD`, `APP_AUTH_SECRET`, `APP_SENHA_PADRAO`) — o `server.js` lê esses campos
+discretos quando `DATABASE_URL` não está setada, e é esse o caminho usado na AWS.
+
+Passo a passo em [Deploy e infraestrutura](#13-deploy-e-infraestrutura-aws).
 
 ---
 
@@ -971,14 +1028,24 @@ in
     tabela
 ```
 
-(`<DB_HOST>`/`<DB_PORT>`/`<DB_NAME>` = os mesmos valores do `.env` do projeto — usuário/senha o
-Power BI pede na hora de conectar.) A partir do próximo refresh do Power BI, qualquer aprovação
+(`<DB_NAME>` = `easelabs`; `<DB_HOST>:<DB_PORT>` = `127.0.0.1:15432` **com o túnel SSM aberto** —
+usuário/senha o Power BI pede na hora de conectar. Leia o pré-requisito de rede logo abaixo antes
+de montar isso: hoje não existe host alcançável sem túnel.) A partir do próximo refresh, qualquer aprovação
 feita no app já aparece no export do KAM, sem manutenção adicional — o DAX/M duplicado desaparece
 e a fonte de verdade passa a ser só este banco.
 
-**Pré-requisito de rede (fora do nosso controle):** a máquina/gateway que roda o refresh do
-Power BI precisa alcançar `<DB_HOST>:<DB_PORT>` (host público do Railway) — se a rede do KAM
-bloquear a porta, é preciso liberar ou usar um gateway com saída permitida.
+**⚠️ Pré-requisito de rede — mudou com a migração e está em aberto:** no Railway o banco tinha
+host público, e bastava o Power BI alcançar a porta. **O RDS não tem endpoint público** — só é
+acessível de dentro da VPC ou por port-forward SSM. Ou seja, a query M acima **só funciona numa
+máquina com o túnel aberto** (`127.0.0.1:15432`), o que não serve para um refresh agendado do
+Power BI Service nem para a máquina do KAM.
+
+Caminhos possíveis, nenhum decidido ainda:
+- **On-premises data gateway** numa máquina que mantenha o túnel SSM de pé;
+- expor os dados pela **warehouse-api** (já existe no mesmo cluster) em vez de conexão direta;
+- endpoint dedicado/peering para o Power BI Service.
+
+Enquanto isso não for resolvido, o KAM continua sem o refresh automático apontando para este banco.
 
 **PDVs aprovados fora da base** (cadastro manual — CNPJ que não existe em
 `estoque_redes.analise_estoque_pdv`) **também aparecem**, como linhas extras no fim da view —
@@ -990,3 +1057,87 @@ seguem a mesma regra de soma da base (tratam ausência como `0`, nunca ficam `NU
 faltar dado — consistente com o resto do modelo). Testado ponta a ponta aprovando duas
 sugestões reais (`id 62/63`, CNPJ fora da base) e revertendo em seguida — a linha nova apareceu
 com exatamente os campos esperados preenchidos/vazios.
+
+---
+
+## 13. Deploy e infraestrutura (AWS)
+
+> **A infra deste app não mora neste repo.** ECS, ALB, ECR, secrets e agendamento são definidos
+> em **Terraform no repo `sales_force_crm`** (`infra/`), que a Natália mantém. Aqui ficam só o
+> código e os dois `Dockerfile`. Mudança de infra = editar `.tf` lá, nunca console nem `aws` CLI.
+
+### O que roda onde
+
+| Peça | Origem neste repo | ECR | Onde roda |
+|---|---|---|---|
+| App web (Express) | `app/Dockerfile` (`node:20-alpine`, porta 3000) | `cockpit-prod-trade-fv` | ECS service `cockpit-prod-trade-fv-app-service`, atrás do ALB |
+| Cron de refresh | `Dockerfile` (raiz, `postgres:17-alpine`) | `cockpit-prod-trade-fv-cron` | Task avulsa, EventBridge Scheduler `cockpit-prod-trade-fv-cron` |
+
+**Duas imagens de propósito**, mesmo padrão do `sales_force_crm` (`Dockerfile` vs
+`Dockerfile.sync`): trocar a imagem do cron nunca deve exigir trocar a do app web, e vice-versa.
+A tag de ambas é o **hash curto do commit**.
+
+Onde cada recurso está definido em `sales_force_crm/infra/`:
+
+| Recurso | Arquivo |
+|---|---|
+| Task definitions + services (app e cron) | `modules/compute/trade_fv.tf` |
+| Schedule do refresh | `modules/compute/schedules.tf` |
+| Repositórios ECR + lifecycle | `ecr.tf` |
+| Security group | `modules/network/main.tf` |
+| Target group, certificado ACM, regra `host_header` | `modules/alb/main.tf` |
+| Variáveis (imagem, cpu, memória, domínio) | `variables.tf` (blocos `trade_fv_*`) |
+| Fiação entre módulos | `main.tf` |
+
+### Publicar uma versão nova
+
+O Terraform é a **fonte da verdade sobre qual imagem roda** — o `trade_fv` **não** usa
+`ignore_changes` (essa exceção existe só para o `cockpit-app`). Por isso trocar a imagem é editar
+uma variável e aplicar, nunca `register-task-definition`/`update-service` na mão.
+
+```bash
+# 1. build + push (fora do Terraform), tag = hash curto do commit
+HASH=$(git rev-parse --short HEAD)
+ECR=595324409476.dkr.ecr.sa-east-1.amazonaws.com
+aws ecr get-login-password --region sa-east-1 \
+  | docker login --username AWS --password-stdin $ECR
+
+# app web
+docker build -t $ECR/cockpit-prod-trade-fv:$HASH ./app
+docker push $ECR/cockpit-prod-trade-fv:$HASH
+
+# cron (só se o SQL ou o Dockerfile da raiz mudou)
+docker build -t $ECR/cockpit-prod-trade-fv-cron:$HASH .
+docker push $ECR/cockpit-prod-trade-fv-cron:$HASH
+```
+
+```bash
+# 2. no repo sales_force_crm: editar o DEFAULT da variável em infra/variables.tf
+#    (trade_fv_container_image / trade_fv_cron_container_image).
+#    NÃO usar terraform.tfvars para isso — não é o mecanismo de deploy do projeto.
+cd ../sales_force_crm/infra
+terraform plan          # 3. LER o diff: só a imagem deve aparecer
+git add infra/variables.tf
+git commit -m "deploy: bump trade_fv_container_image pra <hash>"
+git push                # 4. commit/push ANTES do apply — o .tf só é fonte da verdade no git
+terraform apply         # 5.
+```
+
+### Regras que valem sempre (do `CLAUDE.md` do `sales_force_crm`)
+
+1. **Nunca `apply` sem `plan` antes, e ler o diff de verdade.** Alvo: só o que você mudou. Diff
+   inesperado é **drift** — investigar, não aplicar por cima.
+2. **Nada de alterar recurso gerenciado direto no console/CLI.** Não está no `.tf` = não aconteceu.
+3. **Commit + push do `.tf` antes do `apply`**, não depois.
+4. Se alguém mexeu na mão numa emergência, reconciliar na hora (`import`/`state mv` até o `plan`
+   limpar) — não deixar drift acumular.
+5. **Antes de qualquer mudança no RDS**: snapshot manual, e confirmar que o `plan` é modify
+   **in-place**, nunca `replace`/`destroy`.
+6. O `infra/` é compartilhado com a Natália. Rodar `plan` e conferir que o diff é **só nosso**
+   antes de aplicar; se aparecer mudança de outro serviço, parar e falar com ela.
+
+> **Conferir antes do primeiro `apply`:** o `CLAUDE.md` do `sales_force_crm` (regra 5) diz que o
+> state do Terraform ainda é **local**, enquanto o `PASSO_A_PASSO_DEPLOY_TERRAFORM.md` (regra 3)
+> já fala em state **remoto (S3 + lock no DynamoDB)**. Os dois documentos se contradizem — sem
+> lock, dois `apply` simultâneos se atropelam. Alinhar com a Natália qual é o estado real antes
+> de rodar `apply` pela primeira vez.

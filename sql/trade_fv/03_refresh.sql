@@ -1,6 +1,8 @@
 -- ================================================================================
 --  UPDATE / REFRESH das materialized views de trade_fv
---  Agende este script no Railway (cron job / pg_cron / job externo).
+--  Agendado na AWS: task ECS Fargate avulsa (imagem do Dockerfile da raiz),
+--  disparada pelo EventBridge Scheduler "cockpit-prod-trade-fv-cron" as 02:00
+--  UTC, diariamente. Ver secao 7 do README.
 --
 --  A ORDEM importa (dependencias):
 --    1) fato_cdd_90_dias_agrupada   (base: cddd.fato_cdd)

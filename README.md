@@ -931,7 +931,8 @@ consulta cai para ~100 ms (`EXPLAIN ANALYZE` confirmado). Não altera dados nem 
 ### Workflow de aprovação (`06_sugestao_workflow.sql`)
 `trade_fv.sugestao_fv` (snapshot da unpivot + `"Sugestao VB"` + `"Representante"`) ganhou:
 - `created_at` = **data de envio**; `status_aprovacao` (`PENDENTE` default | `APROVADA` |
-  `RECUSADA`); `decidido_por` / `decidido_em`.
+  `PARCIAL` | `RECUSADA`); `decidido_por` / `decidido_em`.
+- `vb_aprovado` / `comentario_bia` — **aprovação parcial**, ver abaixo.
 - Índice **único parcial** `("CNPJ","EAN","Representante") WHERE status = 'PENDENTE'` —
   garante o bloqueio de duplicidade no banco; o histórico fica em linhas separadas.
 - **Modo BI&A**: quando o admin ajusta o VB diretamente (`POST /api/sugestoes` com
@@ -939,8 +940,8 @@ consulta cai para ~100 ms (`EXPLAIN ANALYZE` confirmado). Não altera dados nem 
   `status_aprovacao = 'APROVADA'` (sem passar pelo bloqueio de pendência nem pela fila).
 
 **`trade_fv.fato_adequacao_estoque_unpivot_ajustada` (VIEW)** — a sugestão padrão
-sobrescrita pelas sugestões **aprovadas**: `"Estoque Ideal"` = VB aprovado (**a mais
-recente** por CNPJ × SKU — se o rep pedir 5 e depois 8 e ambas forem aprovadas, vale a
+sobrescrita pelas sugestões liberadas (`APROVADA` **ou** `PARCIAL`): `"Estoque Ideal"` =
+`COALESCE(vb_aprovado, "Sugestao VB")` (**a mais recente** por CNPJ × SKU — se o rep pedir 5 e depois 8 e ambas forem aprovadas, vale a
 última aprovação, via `ORDER BY decidido_em DESC`), `Delta`/`Ajuste` recalculados, +
 `"Estoque Ideal Sistema"`, `"Origem Sugestao"` (`Representante`/`Sistema`) e
 `"Representante"`. PDVs aprovados fora da base (cadastro manual) entram como linhas
@@ -969,6 +970,39 @@ ruptura observada, sazonalidade local.
 - **Modo BI&A:** o mesmo campo vira "Justificativa da definição" quando o admin define o VB
   direto, registrando o motivo da própria decisão.
 
+### Aprovação parcial (`06_sugestao_workflow.sql`)
+
+O BI&A pode **liberar um VB diferente do que o representante pediu** — o caso típico é o CT pedir
+2 e o BI&A aceitar 1. O valor liberado é o que vale para a sugestão oficial; o pedido original do
+rep fica preservado.
+
+- **Colunas:** `vb_aprovado INTEGER` (o valor que o BI&A liberou) e `comentario_bia TEXT` (motivo
+  opcional, mesmo teto de 500 do comentário do rep).
+- **`"Sugestao VB"` nunca é sobrescrito.** Ele continua guardando o pedido do rep — é o dado que
+  permite a tela mostrar *"pediu 2 · liberado 1"* e o BI&A medir depois o quanto costuma cortar.
+- **Status `PARCIAL`**, gravado quando o valor liberado difere do pedido. Pode ser para menos ou
+  para mais: o BI&A não está limitado ao teto do pedido.
+- **Quem decide o status é o servidor**, comparando `vb_aprovado` com `"Sugestao VB"`. O cliente
+  manda `APROVADA` + o número; nunca `PARCIAL` direto. Isso impede a linha incoerente (`PARCIAL`
+  com o mesmo valor, ou `APROVADA` com o número trocado).
+- **Integridade no banco**, não só no app: `CHECK` garante que `PARCIAL` exige `vb_aprovado`
+  (senão a view cairia de volta no pedido do rep, silenciosamente) e que `vb_aprovado` só existe
+  em linha aprovada e nunca é negativo.
+
+**Na sugestão oficial:** `fato_adequacao_estoque_unpivot_ajustada` passa a considerar
+`APROVADA` **e** `PARCIAL`, usando `COALESCE(vb_aprovado, "Sugestao VB")`. O `COALESCE` também
+cobre as linhas aprovadas antes desta coluna existir, que têm `vb_aprovado` nulo. Como
+`fato_adequacao_estoque_ajustada` (a larga, do Power BI) lê dessa view, a propagação é automática.
+
+> **Cuidado ao aplicar:** a coluna e a view precisam subir **juntas**. Com a coluna criada mas a
+> view antiga (que filtra só `APROVADA`), toda aprovação parcial some da sugestão oficial — o PDV
+> volta para o VB do sistema sem aviso.
+
+**Na tela de Aprovações:** o botão ✎ **Ajustar** (entre aprovar e recusar) abre um painel com o VB
+já preenchido com o que o rep pediu, mais o campo de motivo. O rótulo do status segue os números,
+não o nome interno: "Atendido parcial" quando corta, "Atendido acima" quando amplia — `PARCIAL`
+cobre os dois casos.
+
 ### API (Express)
 | Rota | Auth | Descrição |
 |---|---|---|
@@ -986,7 +1020,7 @@ ruptura observada, sazonalidade local.
 | `POST /api/sugestoes` | login | Insere sugestão (snapshot). Aceita `comentario` (opcional, ≤ 500 chars, `trim`, vazio → `NULL`). `{modo:'bia'}` (admin) grava já aprovada como `'BI&A'`. `role=gr` grava com `"Representante" = "<Nome> (GR)"`, status PENDENTE (não aprova a própria). **409** se já houver PENDENTE do mesmo autor p/ CNPJ × SKU (não se aplica ao modo BI&A). |
 | `GET /api/sugestoes?rep=` \| `?cnpj=` \| `?all=1[&rep=&status=&data_de=&data_ate=]` | admin | Histórico completo (com `media_mensal`) — exclusivo do admin; reps recebem `[]`. **GR** usa a mesma rota (sem `all=`, que é exclusivo do admin): sempre escopado à própria equipe (+ próprias sugestões); `?rep=&status=&data_de=&data_ate=` disponíveis; `?rep=` fora do time é ignorado. |
 | `GET /api/sugestoes/exportar` | admin, gr | Mesmos filtros de `GET /api/sugestoes` acima → `.xlsx` formatado (`exceljs`, ver seção "Indicações da equipe"). **400** se nenhum filtro for informado (admin). |
-| `PATCH /api/sugestoes/:id` | admin | `{acao: APROVADA\|RECUSADA}` → decide pendente. |
+| `PATCH /api/sugestoes/:id` | admin | `{acao: APROVADA\|RECUSADA, vb_aprovado?, comentario_bia?}` → decide pendente. Com `vb_aprovado` diferente do pedido, o servidor grava status `PARCIAL` (ver "Aprovação parcial"). Recusa não aceita `vb_aprovado`. |
 
 ### Rodar local
 ```powershell
